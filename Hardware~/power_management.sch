@@ -1,0 +1,59 @@
+EESchema Schematic File Version 4
+EELAYER 29 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 1 1
+Title "FeltSight Power Management"
+Date "2024"
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+$Comp
+L BATTERY BATTERY
+U 1 1 5F0F0F0F
+P 2000 2000
+F 0 "BATTERY" H 2000 2100 50  0000 C CNN
+F 1 "BATTERY" H 2000 1900 50  0000 C CNN
+F 2 "" H 2000 2000 50  0000 C CNN
+F 3 "" H 2000 2000 50  0000 C CNN
+	1    2000 2000
+	1    0    0    -1
+$EndComp
+$Comp
+L MCP73831 MCP73831
+U 1 1 5F0F0F0F
+P 3000 2000
+F 0 "MCP73831" H 3000 2100 50  0000 C CNN
+F 1 "MCP73831" H 3000 1900 50  0000 C CNN
+F 2 "" H 3000 2000 50  0000 C CNN
+F 3 "" H 3000 2000 50  0000 C CNN
+	1    3000 2000
+	1    0    0    -1
+$EndComp
+$Comp
+L REG1117 REG1117
+U 1 1 5F0F0F0F
+P 4000 2000
+F 0 "REG1117" H 4000 2100 50  0000 C CNN
+F 1 "REG1117" H 4000 1900 50  0000 C CNN
+F 2 "" H 4000 2000 50  0000 C CNN
+F 3 "" H 4000 2000 50  0000 C CNN
+	1    4000 2000
+	1    0    0    -1
+$EndComp
+Wire Wire Line
+	2000 2000 3000 2000
+Wire Wire Line
+	3000 2000 4000 2000
+Text Notes 2000 2500 0    50   ~ 0
+LiPo Battery 3.7V 1000mAh
+Text Notes 3000 2500 0    50   ~ 0
+MCP73831 Charging Circuit
+Text Notes 4000 2500 0    50   ~ 0
+3.3V LDO Regulator
+$EndSCHEMATC 

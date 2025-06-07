@@ -1,5 +1,5 @@
 // Requires hands package and VisionOSHandExtensions which is only compiled for visionOS and Editor
-#if INCLUDE_UNITY_XR_HANDS && (UNITY_VISIONOS || UNITY_EDITOR)
+#if INCLUDE_UNITY_XR_HANDS && (UNITY_VISIONOS || UNITY_EDITOR) // ! 宏不满足,注释之后无法编译  
 using System.Collections.Generic;
 using UnityEngine.XR.Hands;
 #endif

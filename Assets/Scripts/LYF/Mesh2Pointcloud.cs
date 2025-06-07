@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Pcx;
+using TMPro;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
 using Random = UnityEngine.Random;
 
 public class Mesh2Pointcloud : MonoBehaviour
@@ -43,7 +44,7 @@ public class Mesh2Pointcloud : MonoBehaviour
     private Camera viewCamera; // 用于确定视角的相机
 
     [SerializeField, Tooltip("只生成相机周围这个距离内的点云")]
-    private float visibleRadius = 5.0f; // 默认5米范围内的点才会被显示
+    public float visibleRadius = 5.0f; // 默认5米范围内的点才会被显示
 
     [SerializeField, Tooltip("是否只生成相机可见范围内的点")]
     private bool limitByDistance = true; // 是否根据距离限制点云生成
@@ -55,7 +56,20 @@ public class Mesh2Pointcloud : MonoBehaviour
     private float particleLifetime = 10f;
     
     [SerializeField, Tooltip("强制为每个mesh创建独立的粒子系统以支持不同颜色")]
-    private bool useMultipleParticleSystems = true; // 默认开启以支持多颜色
+    private bool useMultipleParticleSystems = true; // 
+    
+    [SerializeField, Tooltip("是否使用颜色缓存，保持每个mesh的颜色一致")]
+    private bool useMeshColorCache = true; // 是否使用颜色缓存
+    
+    [SerializeField]
+    [Tooltip("双手距离(原始数据)")]
+    private Text m_HandsDisText;
+    
+    [SerializeField]
+    [Tooltip("显示通过双手距离计算出来的张开角度")]
+    private Text m_HandsAngleText;
+
+    [SerializeField] private MyHand myHand;
     
     private int currentPointCount = 0; // 当前生成的点云数量
     private float nextUpdateTime;
@@ -240,6 +254,20 @@ public class Mesh2Pointcloud : MonoBehaviour
     
     private void FixedUpdate()
     {
+        // 获取手的距离
+        float handdis = myHand.handsDistance;
+        m_HandsDisText.text = "HandsDis: " + handdis.ToString();
+        float normalizedDistance = Mathf.InverseLerp(0.02f, 0.10f, handdis); // 0.4~0.8 映射到 0~1
+        normalizedDistance = 1 - normalizedDistance;
+        m_HandsAngleText.text = "HandsAngNormalize: " +normalizedDistance.ToString();
+        
+        visibleRadius= normalizedDistance * 3.8f + 0.3f;
+        
+        if (handdis > 0.1f)
+        {
+            return;
+        }
+        
         // 如果updateInterval为0，不自动更新，等待外部调用
         if (updateInterval <= 0)
         {
@@ -254,6 +282,9 @@ public class Mesh2Pointcloud : MonoBehaviour
 
         // 更新下一次刷新时间
         nextUpdateTime = Time.time + updateInterval;
+        
+
+        
 
         // 生成点云
         GeneratePointCloudFromMeshes();
@@ -440,7 +471,21 @@ public class Mesh2Pointcloud : MonoBehaviour
 
     private Color GetOrCreateMeshColor(MeshFilter meshFilter)
     {
-        // 检查这个mesh是否已经有对应的颜色
+        // 如果不使用颜色缓存，每次都生成新颜色
+        if (!useMeshColorCache)
+        {
+            // 生成一个新的随机颜色
+            return useRandomColors
+                ? new Color(
+                    UnityEngine.Random.Range(minColor.r, maxColor.r),
+                    UnityEngine.Random.Range(minColor.g, maxColor.g),
+                    UnityEngine.Random.Range(minColor.b, maxColor.b),
+                    1.0f
+                )
+                : Color.white;
+        }
+
+        // 使用缓存模式，检查这个mesh是否已经有对应的颜色
         if (!meshColorMap.TryGetValue(meshFilter, out Color meshColor))
         {
             // 如果没有，生成一个新的随机颜色
@@ -566,49 +611,58 @@ public class Mesh2Pointcloud : MonoBehaviour
     // 清理不再使用的mesh颜色映射和粒子系统
     private void CleanupUnusedMeshColorMappings()
     {
-        // 创建当前活跃mesh的列表
-        List<MeshFilter> activeMeshes = new List<MeshFilter>();
-        int totalMeshes = m_MeshManager.meshes.Count;
-
-        Debug.Log($"开始处理 {totalMeshes} 个Mesh");
-
-        foreach (var meshFilter in m_MeshManager.meshes)
+        // 如果不使用颜色缓存，直接清空颜色映射字典
+        if (!useMeshColorCache)
         {
-            activeMeshes.Add(meshFilter);
+            meshColorMap.Clear();
+            Debug.Log("未使用颜色缓存，已清空所有颜色映射");
         }
-
-        // 移除不再使用的mesh映射
-        List<MeshFilter> meshesToRemove = new List<MeshFilter>();
-        foreach (var meshEntry in meshColorMap)
+        else
         {
-            if (!activeMeshes.Contains(meshEntry.Key))
+            // 创建当前活跃mesh的列表
+            List<MeshFilter> activeMeshes = new List<MeshFilter>();
+            int totalMeshes = m_MeshManager.meshes.Count;
+
+            Debug.Log($"开始处理 {totalMeshes} 个Mesh");
+
+            foreach (var meshFilter in m_MeshManager.meshes)
             {
-                meshesToRemove.Add(meshEntry.Key);
+                activeMeshes.Add(meshFilter);
             }
-        }
 
-        // 从字典中删除颜色映射
-        foreach (var mesh in meshesToRemove)
-        {
-            meshColorMap.Remove(mesh);
+            // 移除不再使用的mesh映射
+            List<MeshFilter> meshesToRemove = new List<MeshFilter>();
+            foreach (var meshEntry in meshColorMap)
+            {
+                if (!activeMeshes.Contains(meshEntry.Key))
+                {
+                    meshesToRemove.Add(meshEntry.Key);
+                }
+            }
+
+            // 从字典中删除颜色映射
+            foreach (var mesh in meshesToRemove)
+            {
+                meshColorMap.Remove(mesh);
+            }
         }
         
         // 清理不再使用的粒子系统
         if (useMultipleParticleSystems)
         {
             List<MeshFilter> particleSystemsToRemove = new List<MeshFilter>();
-            foreach (var psEntry in meshParticleSystemMap)
-            {
-                if (!activeMeshes.Contains(psEntry.Key))
-                {
-                    particleSystemsToRemove.Add(psEntry.Key);
-                    // 销毁粒子系统GameObject
-                    if (psEntry.Value != null)
-                    {
-                        DestroyImmediate(psEntry.Value.gameObject);
-                    }
-                }
-            }
+            // foreach (var psEntry in meshParticleSystemMap)
+            // {
+            //     if (!activeMeshes.Contains(psEntry.Key))
+            //     {
+            //         particleSystemsToRemove.Add(psEntry.Key);
+            //         // 销毁粒子系统GameObject
+            //         if (psEntry.Value != null)
+            //         {
+            //             DestroyImmediate(psEntry.Value.gameObject);
+            //         }
+            //     }
+            // }
             
             foreach (var mesh in particleSystemsToRemove)
             {

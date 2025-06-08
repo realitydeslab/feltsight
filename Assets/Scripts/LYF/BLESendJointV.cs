@@ -9,6 +9,7 @@ using UnityEngine.XR.Hands;
 /// 使用食指尖速度来控制BLE发送的速度参数
 /// 速度0~0.3 m/s线性映射到1.0x~4.0x速度(10-40)
 /// 添加了OneDollar滤波器来平滑速度数据
+/// 当原始速度小于0.015时，音量设置为0
 /// </summary>
 public class BLESendJointV : MonoBehaviour
 {
@@ -32,6 +33,12 @@ public class BLESendJointV : MonoBehaviour
 
     [SerializeField] [Tooltip("速度映射的最大阈值（米/秒）")]
     private float m_MaxVelocityThreshold = 0.3f;
+
+    [SerializeField] [Tooltip("音量静音的速度阈值（米/秒）- 原始速度低于此值时音量为0")]
+    private float m_VolumeThreshold = 0.015f;
+
+    [SerializeField] [Tooltip("正常播放时的音量（0-100）")]
+    private byte m_NormalVolume = 75;
 
     [SerializeField] [Tooltip("是否在控制台显示调试信息")]
     private bool m_ShowDebugInfo = true;
@@ -68,6 +75,7 @@ public class BLESendJointV : MonoBehaviour
     private Coroutine m_DataSendCoroutine;
     private float m_CurrentSpeed = 0f;
     private byte m_CurrentSpeedByte = 10; // 默认值1.0x速度
+    private byte m_CurrentVolume = 75; // 当前音量
     private float m_VelocityMultiplier = 1.0f; // 速度倍率
     
 
@@ -78,7 +86,7 @@ public class BLESendJointV : MonoBehaviour
     private float m_FilteredMagnitude = 0f;
 
     // 最小速度和最大速度的字节值
-    private const byte MIN_SPEED_BYTE = 10; // 1.0x速度
+    private const byte MIN_SPEED_BYTE = 10; // 1.©
     private const byte MAX_SPEED_BYTE = 40; // 4.0x速度
 
     void Start()
@@ -262,6 +270,16 @@ public class BLESendJointV : MonoBehaviour
         m_RawVelocity = rawVelocity;
         m_RawMagnitude = rawVelocity.magnitude;
 
+        // 根据原始速度决定音量
+        if (m_RawMagnitude < m_VolumeThreshold)
+        {
+            m_CurrentVolume = 0; // 原始速度低于阈值时静音
+        }
+        else
+        {
+            m_CurrentVolume = m_NormalVolume; // 使用正常音量
+        }
+
         // 应用OneDollar滤波
         Vector3 filteredVelocity = rawVelocity;
         if (m_EnableVelocityFilter && m_VelocityFilter != null)
@@ -413,8 +431,8 @@ public class BLESendJointV : MonoBehaviour
             // data[offset] = (byte)((counter + channel) % 10 + 1);
             data[offset] = (byte)(1);
 
-            // 音量：使用固定值75%
-            data[offset + 1] = 75;
+            // 音量：根据原始速度决定是否静音
+            data[offset + 1] = m_CurrentVolume;
 
             // 速度：使用应用了倍率后的速度值
             data[offset + 2] = finalSpeedByte;
@@ -450,8 +468,9 @@ public class BLESendJointV : MonoBehaviour
                 // 打印解析后的数据
                 LogDataContent(data);
 
-                // 打印当前食指速度和映射值，包含滤波信息
-                Debug.Log($"原始速度: {m_RawMagnitude:F3} m/s, 滤波后速度: {m_FilteredMagnitude:F3} m/s, 映射速度: {m_CurrentSpeedByte / 10f:F1}x, 值： {m_CurrentSpeedByte}");
+                // 打印当前食指速度和映射值，包含滤波信息和音量状态
+                string volumeStatus = m_CurrentVolume == 0 ? "静音" : $"音量{m_CurrentVolume}%";
+                Debug.Log($"原始速度: {m_RawMagnitude:F3} m/s, 滤波后速度: {m_FilteredMagnitude:F3} m/s, 映射速度: {m_CurrentSpeedByte / 10f:F1}x, 值： {m_CurrentSpeedByte}, {volumeStatus}");
             }
         }
         catch (System.Exception e)
@@ -480,7 +499,8 @@ public class BLESendJointV : MonoBehaviour
             byte volume = data[offset + 1];
             byte speed = data[offset + 2];
 
-            Debug.Log($"通道 {i + 1}: 文件={fileIndex}, 音量={volume}%, 速度={speed / 10f:F1}x");
+            string volumeInfo = volume == 0 ? "静音" : $"{volume}%";
+            Debug.Log($"通道 {i + 1}: 文件={fileIndex}, 音量={volumeInfo}, 速度={speed / 10f:F1}x");
         }
         Debug.Log("==================");
     }
@@ -513,7 +533,7 @@ public class BLESendJointV : MonoBehaviour
         catch (System.Exception e)
         {
             // 捕获任何异常，确保不影响调用方
-            Debug.LogWarning($"发送单次数据时发生错误，但继续运行: {e.Message}");
+            Debug.LogWarning($"发送单次数据时发生错误，但继续运行： {e.Message}");
         }
     }
 
@@ -527,13 +547,21 @@ public class BLESendJointV : MonoBehaviour
         {
             try
             {
-                // 显示原始速度、滤波后速度和映射后的速度
+                // 显示原始速度、滤波后速度、映射后的速度和音量状态
                 string filterInfo = m_EnableVelocityFilter ? $"(filter strength: {m_VelocityFilterStrength:F2})" : "(no filter)";
-                m_VelocityText.text = $"Ori V: {m_RawMagnitude:F3} m/s\nFiitered V: {m_FilteredMagnitude:F3} m/s {filterInfo}\nPlay V: {m_CurrentSpeedByte / 10f:F1}x\nFactor: {(m_VelocitySlider != null ? m_VelocitySlider.value : m_VelocityMultiplier):F1}";
+                string volumeStatus = m_CurrentVolume == 0 ? "Mute" : $"Volume {m_CurrentVolume}%";
+                m_VelocityText.text = $"Ori V: {m_RawMagnitude:F3} m/s\nFiltered V: {m_FilteredMagnitude:F3} m/s {filterInfo}\nPlay V: {m_CurrentSpeedByte / 10f:F1}x\nFactor: {(m_VelocitySlider != null ? m_VelocitySlider.value : m_VelocityMultiplier):F1}\n{volumeStatus}";
 
-                // 根据滤波后的速度变化颜色
-                float normalizedSpeed = Mathf.InverseLerp(m_MinVelocityThreshold, m_MaxVelocityThreshold, m_FilteredMagnitude);
-                m_VelocityText.color = Color.Lerp(Color.green, Color.red, normalizedSpeed);
+                // 根据滤波后的速度变化颜色，静音时显示灰色
+                if (m_CurrentVolume == 0)
+                {
+                    m_VelocityText.color = Color.gray;
+                }
+                else
+                {
+                    float normalizedSpeed = Mathf.InverseLerp(m_MinVelocityThreshold, m_MaxVelocityThreshold, m_FilteredMagnitude);
+                    m_VelocityText.color = Color.Lerp(Color.green, Color.red, normalizedSpeed);
+                }
             }
             catch (System.Exception e)
             {
@@ -552,7 +580,7 @@ public class BLESendJointV : MonoBehaviour
         m_VelocityText = text;
         if (m_VelocityText != null)
         {
-            m_VelocityText.text = "原始V: 0.000 m/s\n滤波V: 0.000 m/s\nPlay V: 1.0x\nFactor: 1.0";
+            m_VelocityText.text = "Ori V: 0.000 m/s\nFiltered V: 0.000 m/s\nPlay V: 1.0x\nFactor: 1.0\n音量75%";
         }
     }
 
@@ -581,7 +609,7 @@ public class BLESendJointV : MonoBehaviour
 
             if (m_ShowDebugInfo)
             {
-                Debug.Log($"已设置速度倍率滑块，当前值: {m_VelocitySlider.value:F1}");
+                Debug.Log($"已设置速度倍率滑块，当前值： {m_VelocitySlider.value:F1}");
             }
         }
     }
@@ -708,6 +736,52 @@ public class BLESendJointV : MonoBehaviour
     }
 
     /// <summary>
+    /// 设置音量阈值
+    /// </summary>
+    /// <param name="threshold">音量阈值（米/秒），原始速度低于此值时音量为0</param>
+    public void SetVolumeThreshold(float threshold)
+    {
+        m_VolumeThreshold = Mathf.Max(0f, threshold);
+        
+        if (m_ShowDebugInfo)
+        {
+            Debug.Log($"音量阈值已设置为: {m_VolumeThreshold:F3} m/s");
+        }
+    }
+
+    /// <summary>
+    /// 设置正常播放音量
+    /// </summary>
+    /// <param name="volume">音量值（0-100）</param>
+    public void SetNormalVolume(byte volume)
+    {
+        m_NormalVolume = (byte)Mathf.Clamp(volume, 0, 100);
+        
+        if (m_ShowDebugInfo)
+        {
+            Debug.Log($"正常播放音量已设置为: {m_NormalVolume}%");
+        }
+    }
+
+    /// <summary>
+    /// 获取当前音量状态
+    /// </summary>
+    /// <returns>当前音量值</returns>
+    public byte GetCurrentVolume()
+    {
+        return m_CurrentVolume;
+    }
+
+    /// <summary>
+    /// 是否处于静音状态
+    /// </summary>
+    /// <returns>true表示静音，false表示正常播放</returns>
+    public bool IsMuted()
+    {
+        return m_CurrentVolume == 0;
+    }
+
+    /// <summary>
     /// 启用或禁用速度滤波
     /// </summary>
     /// <param name="enable">是否启用滤波</param>
@@ -772,10 +846,13 @@ public class BLESendJointV : MonoBehaviour
     /// <returns>滤波器状态字符串</returns>
     public string GetFilterStatus()
     {
+        string volumeStatus = m_CurrentVolume == 0 ? "静音" : $"音量{m_CurrentVolume}%";
         return $"速度滤波: {(m_EnableVelocityFilter ? "启用" : "禁用")} (强度: {m_VelocityFilterStrength:F2})\n" +
                $"大小滤波: {(m_EnableMagnitudeFilter ? "启用" : "禁用")} (强度： {m_MagnitudeFilterStrength:F2})\n" +
                $"原始速度: {m_RawMagnitude:F3} m/s\n" +
-               $"滤波速度: {m_FilteredMagnitude:F3} m/s";
+               $"滤波速度: {m_FilteredMagnitude:F3} m/s\n" +
+               $"音量阈值: {m_VolumeThreshold:F3} m/s\n" +
+               $"当前状态: {volumeStatus}";
     }
 
     /// <summary>

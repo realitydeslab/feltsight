@@ -8,6 +8,7 @@ using UnityEngine.XR.Hands;
 /// <summary>
 /// 使用食指尖速度来控制BLE发送的速度参数
 /// 速度0~0.3 m/s线性映射到1.0x~4.0x速度(10-40)
+/// 添加了OneDollar滤波器来平滑速度数据
 /// </summary>
 public class BLESendJointV : MonoBehaviour
 {
@@ -38,6 +39,28 @@ public class BLESendJointV : MonoBehaviour
     [SerializeField] [Tooltip("在编辑器中模拟速度值（仅供测试）")]
     private float m_SimulatedVelocity = 0.15f;
 
+    [Header("OneDollar滤波器设置")]
+    [SerializeField] [Tooltip("是否启用速度滤波")]
+    private bool m_EnableVelocityFilter = true;
+    
+    // OneDollar滤波器
+    public OneDollarFilter m_VelocityFilter;
+    public OneDollarFilter m_MagnitudeFilter;
+
+    [SerializeField] [Tooltip("速度滤波强度 (0.01-1.0)，值越小滤波效果越强")]
+    [Range(0.01f, 1.0f)]
+    private float m_VelocityFilterStrength = 0.1f;
+
+    [SerializeField] [Tooltip("是否启用速度大小滤波")]
+    private bool m_EnableMagnitudeFilter = true;
+
+    [SerializeField] [Tooltip("速度大小滤波强度 (0.01-1.0)，值越小滤波效果越强")]
+    [Range(0.01f, 1.0f)]
+    private float m_MagnitudeFilterStrength = 0.15f;
+
+    [SerializeField] [Tooltip("用于调整速度滤波强度的Slider")]
+    private UnityEngine.UI.Slider m_FilterStrengthSlider;
+
     private CoreBluetoothManager m_Manager;
     private CoreBluetoothCharacteristic m_Characteristic;
     private bool m_IsConnectedAndReady = false;
@@ -46,6 +69,13 @@ public class BLESendJointV : MonoBehaviour
     private float m_CurrentSpeed = 0f;
     private byte m_CurrentSpeedByte = 10; // 默认值1.0x速度
     private float m_VelocityMultiplier = 1.0f; // 速度倍率
+    
+
+    // 用于显示原始数据和滤波后数据的对比
+    private Vector3 m_RawVelocity = Vector3.zero;
+    private float m_RawMagnitude = 0f;
+    private Vector3 m_FilteredVelocity = Vector3.zero;
+    private float m_FilteredMagnitude = 0f;
 
     // 最小速度和最大速度的字节值
     private const byte MIN_SPEED_BYTE = 10; // 1.0x速度
@@ -53,6 +83,9 @@ public class BLESendJointV : MonoBehaviour
 
     void Start()
     {
+        // 初始化OneDollar滤波器
+        InitializeFilters();
+
         // 确保有手部追踪组件
         if (m_HandTracker == null)
         {
@@ -69,6 +102,12 @@ public class BLESendJointV : MonoBehaviour
         if (m_VelocitySlider != null)
         {
             m_VelocitySlider.onValueChanged.AddListener(OnVelocitySliderChanged);
+        }
+
+        if (m_FilterStrengthSlider != null)
+        {
+            m_FilterStrengthSlider.value = m_VelocityFilterStrength;
+            m_FilterStrengthSlider.onValueChanged.AddListener(OnFilterStrengthSliderChanged);
         }
 
         // 初始化BLE
@@ -89,11 +128,25 @@ public class BLESendJointV : MonoBehaviour
             m_VelocitySlider.onValueChanged.RemoveListener(OnVelocitySliderChanged);
         }
 
+        if (m_FilterStrengthSlider != null)
+        {
+            m_FilterStrengthSlider.onValueChanged.RemoveListener(OnFilterStrengthSliderChanged);
+        }
+
         StopDataTransmission();
         if (m_Manager != null)
         {
             m_Manager.Stop();
         }
+    }
+
+    /// <summary>
+    /// 初始化OneDollar滤波器
+    /// </summary>
+    private void InitializeFilters()
+    {
+
+        Debug.Log($"OneDollar滤波器已初始化 - 速度滤波强度: {m_VelocityFilterStrength}, 大小滤波强度: {m_MagnitudeFilterStrength}");
     }
 
     /// <summary>
@@ -190,29 +243,56 @@ public class BLESendJointV : MonoBehaviour
     /// </summary>
     private void UpdateFingerVelocityAndSpeed()
     {
+        Vector3 rawVelocity = Vector3.zero;
         float velocityMagnitude = 0f;
 
         #if UNITY_EDITOR
         // 在编辑器中使用模拟值进行测试
-        velocityMagnitude = m_SimulatedVelocity;
+        rawVelocity = new Vector3(m_SimulatedVelocity, 0, 0);
         #else
         // 获取食指尖速度
         if (m_HandTracker.TryGetJointPositionAndVelocity(
             m_HandToUse, XRHandJointID.IndexTip, out Vector3 position, out Vector3 velocity))
         {
-            // 如果有滑块，获取当前倍率值
-            if (m_VelocitySlider != null)
-            {
-                m_VelocityMultiplier = m_VelocitySlider.value;
-            }
-
-            // 应用倍率到速度
-            velocityMagnitude = velocity.magnitude * m_VelocityMultiplier;
-
-            // 确保倍率不为负数或零
-            m_VelocityMultiplier = Mathf.Max(0.1f, m_VelocityMultiplier);
+            rawVelocity = velocity;
         }
         #endif
+
+        // 保存原始数据用于显示
+        m_RawVelocity = rawVelocity;
+        m_RawMagnitude = rawVelocity.magnitude;
+
+        // 应用OneDollar滤波
+        Vector3 filteredVelocity = rawVelocity;
+        if (m_EnableVelocityFilter && m_VelocityFilter != null)
+        {
+            filteredVelocity = m_VelocityFilter.Filter(rawVelocity);
+        }
+
+        // 计算滤波后的速度大小
+        float filteredMagnitude = filteredVelocity.magnitude;
+        
+        // 对速度大小再次应用滤波（可选）
+        if (m_EnableMagnitudeFilter && m_MagnitudeFilter != null)
+        {
+            filteredMagnitude = m_MagnitudeFilter.Filter(filteredMagnitude);
+        }
+
+        // 保存滤波后的数据用于显示
+        m_FilteredVelocity = filteredVelocity;
+        m_FilteredMagnitude = filteredMagnitude;
+
+        // 如果有滑块，获取当前倍率值
+        if (m_VelocitySlider != null)
+        {
+            m_VelocityMultiplier = m_VelocitySlider.value;
+        }
+
+        // 确保倍率不为负数或零
+        m_VelocityMultiplier = Mathf.Max(0.1f, m_VelocityMultiplier);
+
+        // 应用倍率到滤波后的速度
+        velocityMagnitude = filteredMagnitude * m_VelocityMultiplier;
 
         // 将速度映射到1.0x-4.0x范围 (10-40)
         m_CurrentSpeed = Mathf.Clamp(velocityMagnitude, m_MinVelocityThreshold, m_MaxVelocityThreshold);
@@ -370,8 +450,8 @@ public class BLESendJointV : MonoBehaviour
                 // 打印解析后的数据
                 LogDataContent(data);
 
-                // 打印当前食指速度和映射值，与发送同步
-                Debug.Log($"食指速度: {m_CurrentSpeed:F3} m/s, 映射速度: {m_CurrentSpeedByte / 10f:F1}x, 值: {m_CurrentSpeedByte}");
+                // 打印当前食指速度和映射值，包含滤波信息
+                Debug.Log($"原始速度: {m_RawMagnitude:F3} m/s, 滤波后速度: {m_FilteredMagnitude:F3} m/s, 映射速度: {m_CurrentSpeedByte / 10f:F1}x, 值： {m_CurrentSpeedByte}");
             }
         }
         catch (System.Exception e)
@@ -447,17 +527,18 @@ public class BLESendJointV : MonoBehaviour
         {
             try
             {
-                // 显示原始速度和映射后的速度
-                m_VelocityText.text = $"V: {velocityMagnitude:F3} m/s Play V: {m_CurrentSpeedByte / 10f:F1}x\nFactor is: {m_VelocitySlider.GetComponent<Slider>().value:F1}";
+                // 显示原始速度、滤波后速度和映射后的速度
+                string filterInfo = m_EnableVelocityFilter ? $"(filter strength: {m_VelocityFilterStrength:F2})" : "(no filter)";
+                m_VelocityText.text = $"Ori V: {m_RawMagnitude:F3} m/s\nFiitered V: {m_FilteredMagnitude:F3} m/s {filterInfo}\nPlay V: {m_CurrentSpeedByte / 10f:F1}x\nFactor: {(m_VelocitySlider != null ? m_VelocitySlider.value : m_VelocityMultiplier):F1}";
 
-                // 根据速度变化颜色
-                float normalizedSpeed = Mathf.InverseLerp(m_MinVelocityThreshold, m_MaxVelocityThreshold, velocityMagnitude);
+                // 根据滤波后的速度变化颜色
+                float normalizedSpeed = Mathf.InverseLerp(m_MinVelocityThreshold, m_MaxVelocityThreshold, m_FilteredMagnitude);
                 m_VelocityText.color = Color.Lerp(Color.green, Color.red, normalizedSpeed);
             }
             catch (System.Exception e)
             {
                 // 防止UI更新异常影响主流程
-                Debug.LogWarning($"更新速度UI时发生错误: {e.Message}");
+                Debug.LogWarning($"更新速度UI时发生错误： {e.Message}");
             }
         }
     }
@@ -471,7 +552,7 @@ public class BLESendJointV : MonoBehaviour
         m_VelocityText = text;
         if (m_VelocityText != null)
         {
-            m_VelocityText.text = "V: 0.000 m/s Play V: 1.0x";
+            m_VelocityText.text = "原始V: 0.000 m/s\n滤波V: 0.000 m/s\nPlay V: 1.0x\nFactor: 1.0";
         }
     }
 
@@ -506,6 +587,36 @@ public class BLESendJointV : MonoBehaviour
     }
 
     /// <summary>
+    /// 设置滤波强度滑块
+    /// </summary>
+    /// <param name="slider">用于控制滤波强度的滑块</param>
+    public void SetFilterStrengthSlider(UnityEngine.UI.Slider slider)
+    {
+        // 移除之前的监听器（如果有）
+        if (m_FilterStrengthSlider != null)
+        {
+            m_FilterStrengthSlider.onValueChanged.RemoveListener(OnFilterStrengthSliderChanged);
+        }
+
+        // 设置新的滑块并添加监听器
+        m_FilterStrengthSlider = slider;
+
+        if (m_FilterStrengthSlider != null)
+        {
+            // 设置滑块初始值为当前滤波强度
+            m_FilterStrengthSlider.value = m_VelocityFilterStrength;
+
+            // 添加值变化监听器
+            m_FilterStrengthSlider.onValueChanged.AddListener(OnFilterStrengthSliderChanged);
+
+            if (m_ShowDebugInfo)
+            {
+                Debug.Log($"已设置滤波强度滑块，当前值: {m_FilterStrengthSlider.value:F2}");
+            }
+        }
+    }
+
+    /// <summary>
     /// 获取当前实际播放速率（已应用倍率）
     /// </summary>
     /// <returns>实际播放速率(1.0x-4.0x)</returns>
@@ -525,6 +636,15 @@ public class BLESendJointV : MonoBehaviour
     }
 
     /// <summary>
+    /// 响应滤波强度滑块值变化
+    /// </summary>
+    /// <param name="value">滑块的值</param>
+    private void OnFilterStrengthSliderChanged(float value)
+    {
+        SetFilterStrength(value);
+    }
+
+    /// <summary>
     /// 设置速度倍率（用于注册到Slider的valueChanged事件）
     /// </summary>
     /// <param name="multiplier">速度倍率，建议范围0.1-5.0</param>
@@ -540,12 +660,6 @@ public class BLESendJointV : MonoBehaviour
         float basePlaybackRate = m_CurrentSpeedByte / 10f; // 原始映射速率（1.0x-4.0x）
         float actualPlaybackRate = Mathf.Clamp(basePlaybackRate * m_VelocityMultiplier, 1.0f, 4.0f); // 应用倍率后的实际速率
         byte finalSpeedByte = (byte)Mathf.RoundToInt(actualPlaybackRate * 10); // 最终传输的字节值
-
-        if (m_VelocityText != null)
-        {
-            // 更新倍率显示
-            m_VelocityText.text = $"V: {m_CurrentSpeed:F3} m/s (x{m_VelocityMultiplier:F1}) Play V: {actualPlaybackRate:F1}x\nFactor is: {m_VelocitySlider.GetComponent<Slider>().value:F1}";
-        }
 
         if (m_ShowDebugInfo)
         {
@@ -565,6 +679,103 @@ public class BLESendJointV : MonoBehaviour
                 Debug.LogWarning($"倍率更改后发送数据时发生错误: {e.Message}");
             }
         }
+    }
+
+    /// <summary>
+    /// 设置滤波强度
+    /// </summary>
+    /// <param name="strength">滤波强度 (0.01-1.0)，值越小滤波效果越强</param>
+    public void SetFilterStrength(float strength)
+    {
+        m_VelocityFilterStrength = Mathf.Clamp(strength, 0.01f, 1.0f);
+        m_MagnitudeFilterStrength = m_VelocityFilterStrength; // 同步设置
+
+        // 更新滤波器强度
+        if (m_VelocityFilter != null)
+        {
+            m_VelocityFilter.SetFilterStrength(m_VelocityFilterStrength);
+        }
+
+        if (m_MagnitudeFilter != null)
+        {
+            m_MagnitudeFilter.SetFilterStrength(m_MagnitudeFilterStrength);
+        }
+
+        if (m_ShowDebugInfo)
+        {
+            Debug.Log($"滤波强度已设置为: {m_VelocityFilterStrength:F2}");
+        }
+    }
+
+    /// <summary>
+    /// 启用或禁用速度滤波
+    /// </summary>
+    /// <param name="enable">是否启用滤波</param>
+    public void SetVelocityFilterEnabled(bool enable)
+    {
+        m_EnableVelocityFilter = enable;
+
+        if (!enable && m_VelocityFilter != null)
+        {
+            m_VelocityFilter.Reset();
+        }
+
+        if (m_ShowDebugInfo)
+        {
+            Debug.Log($"速度滤波已{(enable ? "启用" : "禁用")}");
+        }
+    }
+
+    /// <summary>
+    /// 启用或禁用速度大小滤波
+    /// </summary>
+    /// <param name="enable">是否启用滤波</param>
+    public void SetMagnitudeFilterEnabled(bool enable)
+    {
+        m_EnableMagnitudeFilter = enable;
+
+        if (!enable && m_MagnitudeFilter != null)
+        {
+            m_MagnitudeFilter.Reset();
+        }
+
+        if (m_ShowDebugInfo)
+        {
+            Debug.Log($"速度大小滤波已{(enable ? "启用" : "禁用")}");
+        }
+    }
+
+    /// <summary>
+    /// 重置所有滤波器
+    /// </summary>
+    public void ResetFilters()
+    {
+        if (m_VelocityFilter != null)
+        {
+            m_VelocityFilter.Reset();
+        }
+
+        if (m_MagnitudeFilter != null)
+        {
+            m_MagnitudeFilter.Reset();
+        }
+
+        if (m_ShowDebugInfo)
+        {
+            Debug.Log("所有滤波器已重置");
+        }
+    }
+
+    /// <summary>
+    /// 获取滤波器状态信息
+    /// </summary>
+    /// <returns>滤波器状态字符串</returns>
+    public string GetFilterStatus()
+    {
+        return $"速度滤波: {(m_EnableVelocityFilter ? "启用" : "禁用")} (强度: {m_VelocityFilterStrength:F2})\n" +
+               $"大小滤波: {(m_EnableMagnitudeFilter ? "启用" : "禁用")} (强度： {m_MagnitudeFilterStrength:F2})\n" +
+               $"原始速度: {m_RawMagnitude:F3} m/s\n" +
+               $"滤波速度: {m_FilteredMagnitude:F3} m/s";
     }
 
     /// <summary>

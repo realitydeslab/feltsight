@@ -97,10 +97,10 @@ public class BLESendJointV : MonoBehaviour
         // 确保有手部追踪组件
         if (m_HandTracker == null)
         {
-            m_HandTracker = FindObjectOfType<MyHand>();
+            m_HandTracker = FindFirstObjectByType<MyHand>();
             if (m_HandTracker == null)
             {
-                Debug.LogError("未找到MyHand组件，请手动分配");
+                Debug.LogError("MyHand component not found, please assign manually");
                 enabled = false;
                 return;
             }
@@ -154,7 +154,7 @@ public class BLESendJointV : MonoBehaviour
     private void InitializeFilters()
     {
 
-        Debug.Log($"OneDollar滤波器已初始化 - 速度滤波强度: {m_VelocityFilterStrength}, 大小滤波强度: {m_MagnitudeFilterStrength}");
+        Debug.Log($"OneDollar filters initialized - Velocity filter strength: {m_VelocityFilterStrength}, Magnitude filter strength: {m_MagnitudeFilterStrength}");
     }
 
     /// <summary>
@@ -162,14 +162,14 @@ public class BLESendJointV : MonoBehaviour
     /// </summary>
     private void InitializeBLE()
     {
-        Debug.Log("BLESendJointV 开始初始化BLE连接");
+        Debug.Log("BLESendJointV starting BLE connection initialization");
         try
         {
             m_Manager = CoreBluetoothManager.Shared;
 
         m_Manager.OnUpdateState((string state) =>
         {
-            Debug.Log("BLE状态: " + state);
+            Debug.Log("BLE state: " + state);
             if (state != "poweredOn") return;
             m_Manager.StartScan();
         });
@@ -178,26 +178,26 @@ public class BLESendJointV : MonoBehaviour
         {
             if (peripheral.name != "" && peripheral.name != null && peripheral.name != "(null-name)" && peripheral.name != "null-name")
             {
-                Debug.Log("发现设备: " + peripheral.name);
+                Debug.Log("Device discovered: " + peripheral.name);
             }
 
             if (peripheral.name != "ESP32-BLE" && peripheral.name != "FeltSight BLE") return;
 
             m_Manager.StopScan();
             m_IsScanStopped = true;
-            Debug.Log("已停止扫描，准备连接设备");
+            Debug.Log("Scan stopped, preparing to connect to device");
             m_Manager.ConnectToPeripheral(peripheral);
         });
 
         m_Manager.OnConnectPeripheral((CoreBluetoothPeripheral peripheral) =>
         {
-            Debug.Log("已连接设备: " + peripheral.name);
+            Debug.Log("Connected to device: " + peripheral.name);
             peripheral.discoverServices();
         });
 
         m_Manager.OnDiscoverService((CoreBluetoothService service) =>
         {
-            Debug.Log("发现服务UUID: " + service.uuid);
+            Debug.Log("Service UUID discovered: " + service.uuid);
             // ESP32服务UUID
             if (service.uuid.ToUpper() != "6E400001-B5A3-F393-E0A9-E50E24DCCA9E") return;
             service.discoverCharacteristics();
@@ -207,13 +207,13 @@ public class BLESendJointV : MonoBehaviour
         {
             string uuid = characteristic.Uuid.ToUpper();
             string[] usage = characteristic.Propertis;
-            Debug.Log("发现特征UUID: " + uuid + ", 用途: " + string.Join(",", usage));
+            Debug.Log("Characteristic UUID discovered: " + uuid + ", Usage: " + string.Join(",", usage));
 
             // 查找RX特征（用于写入数据到ESP32）
             if (uuid == "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
             {
                 m_Characteristic = characteristic;
-                Debug.Log("找到RX特征，可以发送数据");
+                Debug.Log("RX characteristic found, ready to send data");
 
                 // 确保扫描已停止后才设置连接就绪状态
                 m_IsConnectedAndReady = true;
@@ -221,7 +221,7 @@ public class BLESendJointV : MonoBehaviour
                 // 确保不会重复启动数据发送
                 if (m_DataSendCoroutine == null)
                 {
-                    Debug.Log("扫描已停止，开始发送数据");
+                    Debug.Log("Scan stopped, starting data transmission");
                     StartDataTransmission();
                 }
             }
@@ -242,7 +242,7 @@ public class BLESendJointV : MonoBehaviour
         catch (System.Exception e)
         {
             // 记录初始化错误但允许程序继续运行
-            Debug.LogError($"BLE初始化失败，但不影响主进程: {e.Message}");
+            Debug.LogError($"BLE initialization failed, but main process continues: {e.Message}");
         }
     }
 
@@ -337,12 +337,12 @@ public class BLESendJointV : MonoBehaviour
         // 确保扫描已停止后才开始发送数据
         if (m_IsScanStopped)
         {
-            Debug.Log("开始周期性发送数据");
+            Debug.Log("Starting periodic data transmission");
             m_DataSendCoroutine = StartCoroutine(SendDataPeriodically());
         }
         else
         {
-            Debug.LogWarning("扫描尚未停止，不能发送数据");
+            Debug.LogWarning("Scan not stopped yet, cannot send data");
         }
     }
 
@@ -380,13 +380,13 @@ public class BLESendJointV : MonoBehaviour
                 }
                 else
                 {
-                    Debug.LogWarning("BLE特征不可用，等待下一次尝试");
+                    Debug.LogWarning("BLE characteristic not available, waiting for next attempt");
                 }
             }
             catch (System.Exception e)
             {
                 // 捕获所有异常，确保协程不会因任何错误而中断
-                Debug.LogWarning($"发送周期中发生错误，但继续运行: {e.Message}");
+                Debug.LogWarning($"Error occurred during transmission cycle, but continuing: {e.Message}");
             }
 
             yield return new WaitForSeconds(m_SendInterval);
@@ -451,7 +451,7 @@ public class BLESendJointV : MonoBehaviour
     {
         if (m_Characteristic == null || !m_IsConnectedAndReady)
         {
-            Debug.LogWarning("特征未准备好或连接已断开");
+            Debug.LogWarning("Characteristic not ready or connection lost");
             return;
         }
 
@@ -463,20 +463,20 @@ public class BLESendJointV : MonoBehaviour
             {
                 // 打印发送的数据用于调试
                 string hexString = System.BitConverter.ToString(data).Replace("-", " ");
-                Debug.Log($"发送数据: {hexString}");
+                Debug.Log($"Data sent: {hexString}");
 
                 // 打印解析后的数据
                 LogDataContent(data);
 
                 // 打印当前食指速度和映射值，包含滤波信息和音量状态
-                string volumeStatus = m_CurrentVolume == 0 ? "静音" : $"音量{m_CurrentVolume}%";
-                Debug.Log($"原始速度: {m_RawMagnitude:F3} m/s, 滤波后速度: {m_FilteredMagnitude:F3} m/s, 映射速度: {m_CurrentSpeedByte / 10f:F1}x, 值： {m_CurrentSpeedByte}, {volumeStatus}");
+                string volumeStatus = m_CurrentVolume == 0 ? "Muted" : $"Volume {m_CurrentVolume}%";
+                Debug.Log($"Raw velocity: {m_RawMagnitude:F3} m/s, Filtered velocity: {m_FilteredMagnitude:F3} m/s, Mapped speed: {m_CurrentSpeedByte / 10f:F1}x, Value: {m_CurrentSpeedByte}, {volumeStatus}");
             }
         }
         catch (System.Exception e)
         {
             // 只记录错误但不抛出异常，确保不影响主进程
-            Debug.LogWarning($"发送数据失败，但继续运行: {e.Message}");
+            Debug.LogWarning($"Failed to send data, but continuing: {e.Message}");
         }
     }
 
@@ -487,11 +487,11 @@ public class BLESendJointV : MonoBehaviour
     {
         if (data.Length != 32 || data[0] != 0xFE || data[31] != 0xFF)
         {
-            Debug.LogError("数据格式错误");
+            Debug.LogError("Data format error");
             return;
         }
 
-        Debug.Log("=== 数据内容 ===");
+        Debug.Log("=== Data Content ===");
         for (int i = 0; i < 10; i++)
         {
             int offset = 1 + i * 3;
@@ -499,8 +499,8 @@ public class BLESendJointV : MonoBehaviour
             byte volume = data[offset + 1];
             byte speed = data[offset + 2];
 
-            string volumeInfo = volume == 0 ? "静音" : $"{volume}%";
-            Debug.Log($"通道 {i + 1}: 文件={fileIndex}, 音量={volumeInfo}, 速度={speed / 10f:F1}x");
+            string volumeInfo = volume == 0 ? "Muted" : $"{volume}%";
+            Debug.Log($"Channel {i + 1}: File={fileIndex}, Volume={volumeInfo}, Speed={speed / 10f:F1}x");
         }
         Debug.Log("==================");
     }
@@ -522,18 +522,18 @@ public class BLESendJointV : MonoBehaviour
             {
                 if (!m_IsScanStopped)
                 {
-                    Debug.LogWarning("扫描尚未停止，不能发送数据");
+                    Debug.LogWarning("Scan not stopped yet, cannot send data");
                 }
                 else
                 {
-                    Debug.LogWarning("BLE未连接或特征未准备好");
+                    Debug.LogWarning("BLE not connected or characteristic not ready");
                 }
             }
         }
         catch (System.Exception e)
         {
             // 捕获任何异常，确保不影响调用方
-            Debug.LogWarning($"发送单次数据时发生错误，但继续运行： {e.Message}");
+            Debug.LogWarning($"Error occurred while sending single data, but continuing: {e.Message}");
         }
     }
 
@@ -566,7 +566,7 @@ public class BLESendJointV : MonoBehaviour
             catch (System.Exception e)
             {
                 // 防止UI更新异常影响主流程
-                Debug.LogWarning($"更新速度UI时发生错误： {e.Message}");
+                Debug.LogWarning($"Error occurred while updating velocity UI: {e.Message}");
             }
         }
     }
@@ -580,7 +580,7 @@ public class BLESendJointV : MonoBehaviour
         m_VelocityText = text;
         if (m_VelocityText != null)
         {
-            m_VelocityText.text = "Ori V: 0.000 m/s\nFiltered V: 0.000 m/s\nPlay V: 1.0x\nFactor: 1.0\n音量75%";
+            m_VelocityText.text = "Ori V: 0.000 m/s\nFiltered V: 0.000 m/s\nPlay V: 1.0x\nFactor: 1.0\nVolume 75%";
         }
     }
 
@@ -609,7 +609,7 @@ public class BLESendJointV : MonoBehaviour
 
             if (m_ShowDebugInfo)
             {
-                Debug.Log($"已设置速度倍率滑块，当前值： {m_VelocitySlider.value:F1}");
+                Debug.Log($"Velocity multiplier slider set, current value: {m_VelocitySlider.value:F1}");
             }
         }
     }
@@ -639,7 +639,7 @@ public class BLESendJointV : MonoBehaviour
 
             if (m_ShowDebugInfo)
             {
-                Debug.Log($"已设置滤波强度滑块，当前值: {m_FilterStrengthSlider.value:F2}");
+                Debug.Log($"Filter strength slider set, current value: {m_FilterStrengthSlider.value:F2}");
             }
         }
     }
@@ -691,7 +691,7 @@ public class BLESendJointV : MonoBehaviour
 
         if (m_ShowDebugInfo)
         {
-            Debug.Log($"速度倍率已设置为: {m_VelocityMultiplier:F1}，原始速度:{basePlaybackRate:F1}x，实际传输速度:{actualPlaybackRate:F1}x (值:{finalSpeedByte})");
+            Debug.Log($"Velocity multiplier set to: {m_VelocityMultiplier:F1}, Original speed: {basePlaybackRate:F1}x, Actual transmission speed: {actualPlaybackRate:F1}x (Value: {finalSpeedByte})");
         }
 
         // 如果正在发送数据，可以考虑立即发送一次最新速度的数据
@@ -704,7 +704,7 @@ public class BLESendJointV : MonoBehaviour
             }
             catch (System.Exception e)
             {
-                Debug.LogWarning($"倍率更改后发送数据时发生错误: {e.Message}");
+                Debug.LogWarning($"Error occurred while sending data after multiplier change: {e.Message}");
             }
         }
     }
@@ -731,7 +731,7 @@ public class BLESendJointV : MonoBehaviour
 
         if (m_ShowDebugInfo)
         {
-            Debug.Log($"滤波强度已设置为: {m_VelocityFilterStrength:F2}");
+            Debug.Log($"Filter strength set to: {m_VelocityFilterStrength:F2}");
         }
     }
 
@@ -745,7 +745,7 @@ public class BLESendJointV : MonoBehaviour
         
         if (m_ShowDebugInfo)
         {
-            Debug.Log($"音量阈值已设置为: {m_VolumeThreshold:F3} m/s");
+            Debug.Log($"Volume threshold set to: {m_VolumeThreshold:F3} m/s");
         }
     }
 
@@ -759,7 +759,7 @@ public class BLESendJointV : MonoBehaviour
         
         if (m_ShowDebugInfo)
         {
-            Debug.Log($"正常播放音量已设置为: {m_NormalVolume}%");
+            Debug.Log($"Normal playback volume set to: {m_NormalVolume}%");
         }
     }
 
@@ -796,7 +796,7 @@ public class BLESendJointV : MonoBehaviour
 
         if (m_ShowDebugInfo)
         {
-            Debug.Log($"速度滤波已{(enable ? "启用" : "禁用")}");
+            Debug.Log($"Velocity filter {(enable ? "enabled" : "disabled")}");
         }
     }
 
@@ -815,7 +815,7 @@ public class BLESendJointV : MonoBehaviour
 
         if (m_ShowDebugInfo)
         {
-            Debug.Log($"速度大小滤波已{(enable ? "启用" : "禁用")}");
+            Debug.Log($"Magnitude filter {(enable ? "enabled" : "disabled")}");
         }
     }
 
@@ -836,7 +836,7 @@ public class BLESendJointV : MonoBehaviour
 
         if (m_ShowDebugInfo)
         {
-            Debug.Log("所有滤波器已重置");
+            Debug.Log("All filters reset");
         }
     }
 
@@ -846,13 +846,13 @@ public class BLESendJointV : MonoBehaviour
     /// <returns>滤波器状态字符串</returns>
     public string GetFilterStatus()
     {
-        string volumeStatus = m_CurrentVolume == 0 ? "静音" : $"音量{m_CurrentVolume}%";
-        return $"速度滤波: {(m_EnableVelocityFilter ? "启用" : "禁用")} (强度: {m_VelocityFilterStrength:F2})\n" +
-               $"大小滤波: {(m_EnableMagnitudeFilter ? "启用" : "禁用")} (强度： {m_MagnitudeFilterStrength:F2})\n" +
-               $"原始速度: {m_RawMagnitude:F3} m/s\n" +
-               $"滤波速度: {m_FilteredMagnitude:F3} m/s\n" +
-               $"音量阈值: {m_VolumeThreshold:F3} m/s\n" +
-               $"当前状态: {volumeStatus}";
+        string volumeStatus = m_CurrentVolume == 0 ? "Muted" : $"Volume {m_CurrentVolume}%";
+        return $"Velocity filter: {(m_EnableVelocityFilter ? "Enabled" : "Disabled")} (Strength: {m_VelocityFilterStrength:F2})\n" +
+               $"Magnitude filter: {(m_EnableMagnitudeFilter ? "Enabled" : "Disabled")} (Strength: {m_MagnitudeFilterStrength:F2})\n" +
+               $"Raw velocity: {m_RawMagnitude:F3} m/s\n" +
+               $"Filtered velocity: {m_FilteredMagnitude:F3} m/s\n" +
+               $"Volume threshold: {m_VolumeThreshold:F3} m/s\n" +
+               $"Current status: {volumeStatus}";
     }
 
     /// <summary>
@@ -863,16 +863,16 @@ public class BLESendJointV : MonoBehaviour
         if (m_DataSendCoroutine != null)
         {
             StopDataTransmission();
-            Debug.Log("停止发送数据");
+            Debug.Log("Data transmission stopped");
         }
         else if (m_IsConnectedAndReady && m_IsScanStopped)
         {
             StartDataTransmission();
-            Debug.Log("开始发送数据");
+            Debug.Log("Data transmission started");
         }
         else if (!m_IsScanStopped)
         {
-            Debug.LogWarning("扫描尚未停止，不能发送数据");
+            Debug.LogWarning("Scan not stopped yet, cannot send data");
         }
     }
 }

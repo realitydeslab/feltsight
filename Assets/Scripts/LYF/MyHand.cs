@@ -313,20 +313,20 @@ public class MyHand : MonoBehaviour
 
         
         // 打印手指尖关节位置和速度
-        Debug.Log($"{handName} 手指尖信息:");
+        Debug.Log($"{handName} finger info:");
 
         if (TryGetJointPositionAndVelocity(
                 handName == "Left Hand" ? Handedness.Left : Handedness.Right, 
                 XRHandJointID.ThumbTip, out Vector3 thumbPos, out Vector3 thumbVel))
         {
-            Debug.Log($"  拇指尖: 位置 {thumbPos:F3}, 速度 {thumbVel.magnitude:F3}米/秒");
+            Debug.Log($"  Thumb tip: Position {thumbPos:F3}, Velocity {thumbVel.magnitude:F3} m/s");
         }
 
         if (TryGetJointPositionAndVelocity(
                 handName == "Left Hand" ? Handedness.Left : Handedness.Right, 
                 XRHandJointID.IndexTip, out Vector3 indexPos, out Vector3 indexVel))
         {
-            Debug.Log($"  食指尖: 位置 {indexPos:F3}, 速度 {indexVel.magnitude:F3}米/秒");
+            Debug.Log($"  Index tip: Position {indexPos:F3}, Velocity {indexVel.magnitude:F3} m/s");
         }
         
 
@@ -571,7 +571,7 @@ public class MyHand : MonoBehaviour
     {
         if (positions == null || velocities == null || positions.Length < 5 || velocities.Length < 5)
         {
-            Debug.LogError("数组长度必须至少为5");
+            Debug.LogError("Array length must be at least 5");
             return 0;
         }
 

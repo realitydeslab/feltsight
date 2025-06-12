@@ -7,8 +7,6 @@ using UnityEngine.XR.VisionOS;
 
 public class VFXMan : MonoBehaviour
 {
-    [Header("VFX Settings")]
-    public VisualEffect vfx;
     private Dictionary<MeshFilter, VisualEffect> vfxMap = new Dictionary<MeshFilter, VisualEffect>();
     public GameObject vfxMeshPrefab; 
     [Header("AR Mesh Settings")]

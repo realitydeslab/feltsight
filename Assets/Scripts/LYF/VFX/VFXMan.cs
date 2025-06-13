@@ -3,6 +3,8 @@ using UnityEngine.VFX;
 using UnityEngine.XR.ARFoundation;
 using System.Collections.Generic;
 using System.Linq;
+using TMPro;
+using UnityEngine.UI;
 using UnityEngine.XR.VisionOS;
 
 public class VFXMan : MonoBehaviour
@@ -18,9 +20,11 @@ public class VFXMan : MonoBehaviour
     
     [SerializeField, Tooltip("更新合并mesh的间隔(秒)")]
     private float mergeUpdateInterval = 0.5f;
-    
-    
 
+    [Header("Hand Data")] [SerializeField] private MyHand hand;
+    
+    [Header("Debug UI")]
+[SerializeField] private Text TextShowHandsBall;
 
     
     private Matrix4x4 lastTransformMatrix;
@@ -110,11 +114,27 @@ public class VFXMan : MonoBehaviour
 
             // 3) 更新已有 VFX 参数
             var vfxInst = vfxMap[mf];
-            // vfxInst.transform.position=mf.transform.position;
-            // vfxInst.transform.rotation=mf.transform.rotation;
             vfxInst.SetMesh("PointCloudMesh", mf.mesh);
             vfxInst.SetVector3("PointCloudTransform", mf.transform.localPosition);
             vfxInst.SetVector3("PointCloudRotation", mf.transform.localEulerAngles);
+            // 半径 1 - 0.5 m 实测我的手20度到80度
+            float ballRadius;
+            if (hand.handsDistance < 0.1)
+            {
+                // 两只手根部贴在一起
+            ballRadius = (float)((hand.palmAngle - 20) / 40.0 * 0.5 + 0.5);
+                
+            }
+            else
+            {
+                ballRadius = 0.0f;
+            }
+            vfxInst.SetFloat("MaskBall", ballRadius);
+            if (TextShowHandsBall)
+            {
+            TextShowHandsBall.text = $"Hands control ball radius: {ballRadius} m";
+                
+            }
             
         }
         

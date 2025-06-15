@@ -14,6 +14,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_EnvironmentPrefabPaths:
   - Assets/Models/XREnv/XREnv_Room17.prefab
-  - Assets/Simulation Environment.prefab
   - Packages/com.unity.xr.arfoundation/Assets/Prefabs/DefaultSimulationEnvironment.prefab
   m_FallbackAtEndOfList: 1

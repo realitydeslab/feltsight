@@ -42,8 +42,8 @@ public class HandRaycaster : MonoBehaviour
     };
     
     // 存储射线命中信息和对应的球体
-    private Dictionary<string, RaycastHit> lastHits = new Dictionary<string, RaycastHit>();
-    private Dictionary<string, GameObject> fingerSpheres = new Dictionary<string, GameObject>();
+    public Dictionary<string, RaycastHit> lastHits = new Dictionary<string, RaycastHit>();
+    public Dictionary<string, GameObject> fingerSpheres = new Dictionary<string, GameObject>();
     
     void Start()
     {

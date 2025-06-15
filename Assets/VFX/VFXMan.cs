@@ -27,6 +27,7 @@ public class VFXMan : MonoBehaviour
     [Header("Hand Data")] 
     public bool isUseRealHandData = true;
     [SerializeField] private MyHand hand;
+    [SerializeField] private HandRaycaster handRaycaster;
     
     [Header("Debug UI")]
 [SerializeField] private Text TextShowHandsBall;
@@ -239,6 +240,13 @@ public class VFXMan : MonoBehaviour
 
                 }
             }
+            
+            var hitValues = handRaycaster.lastHits.Values.ToArray();
+            for (int i = 0; i < hitValues.Length; i++)
+            {
+                vfxInst.SetVector3($"finger {i}", hitValues[i].point);
+            }
+            
 
         }
         

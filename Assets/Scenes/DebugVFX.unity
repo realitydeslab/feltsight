@@ -14620,7 +14620,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7005529728213326090, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8069771492787411603, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_Asset
@@ -14708,7 +14708,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8383429835377945009, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_Enabled
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8383429835377945009, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_CastShadows
@@ -17626,11 +17626,11 @@ MonoBehaviour:
   m_NormalVolume: 75
   m_ShowDebugInfo: 1
   m_SimulatedVelocity: 0.15
-  m_EnableVelocityFilter: 1
-  m_VelocityFilter: {fileID: 1912603854}
-  m_MagnitudeFilter: {fileID: 0}
+  m_EnableVelocityFilter: 0
+  m_VelocityFilter: {fileID: 2054631609}
+  m_MagnitudeFilter: {fileID: 1912603854}
   m_VelocityFilterStrength: 0.1
-  m_EnableMagnitudeFilter: 1
+  m_EnableMagnitudeFilter: 0
   m_MagnitudeFilterStrength: 0.15
   m_FilterStrengthSlider: {fileID: 0}
 --- !u!1 &2114767629
@@ -18587,19 +18587,19 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 2174698698059701097, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_LocalScale.x
-      value: 0.8
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2174698698059701097, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_LocalScale.y
-      value: 0.8
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2174698698059701097, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_LocalScale.z
-      value: 0.8
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2174698698059701097, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0
+      value: 1.2682
       objectReference: {fileID: 0}
     - target: {fileID: 2174698698059701097, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_LocalPosition.y
@@ -18647,7 +18647,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7005529728213326090, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8069771492787411603, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_Asset
@@ -18679,19 +18679,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8069771492787411603, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_PropertySheet.m_Uint.m_Array.Array.data[0].m_Value
-      value: 40000
+      value: 10000
       objectReference: {fileID: 0}
     - target: {fileID: 8069771492787411603, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_PropertySheet.m_Float.m_Array.Array.data[0].m_Value
-      value: 0.01
+      value: 0.0006
       objectReference: {fileID: 0}
     - target: {fileID: 8069771492787411603, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_PropertySheet.m_Float.m_Array.Array.data[1].m_Value
-      value: 9999
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8069771492787411603, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_PropertySheet.m_Float.m_Array.Array.data[2].m_Value
-      value: 100
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 8069771492787411603, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_PropertySheet.m_Vector3f.m_Array.Array.data[4].m_Name
@@ -18735,7 +18735,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8383429835377945009, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_Enabled
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8383429835377945009, guid: a6538f3caa42948eab3f24592a350000, type: 3}
       propertyPath: m_CastShadows

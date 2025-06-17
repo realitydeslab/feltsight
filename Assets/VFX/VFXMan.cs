@@ -240,12 +240,20 @@ public class VFXMan : MonoBehaviour
 
                 }
             }
-            
-            var hitValues = handRaycaster.lastHits.Values.ToArray();
-            for (int i = 0; i < hitValues.Length; i++)
+
+            foreach (var hitinfo in handRaycaster.lastHits)
             {
-                vfxInst.SetVector3($"finger {i}", hitValues[i].point);
+                int vfxIndexInside = 0;
+                var handName= hitinfo.Key.Split("_")[0];
+                var fingerName= hitinfo.Key.Split("_")[1];
+                
+                vfxIndexInside += handName == "Left" ? 0 : 5;
+                vfxIndexInside += HandRaycaster.FingerName2index(fingerName);
+                vfxInst.SetVector3($"finger {vfxIndexInside+1}", hitinfo.Value.point);
+                vfxInst.SetVector3($"fingerNormal {vfxIndexInside+1}", hitinfo.Value.normal);
+
             }
+            
             
 
         }

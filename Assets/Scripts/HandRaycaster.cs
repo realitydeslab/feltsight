@@ -1,8 +1,175 @@
 using UnityEngine;
-using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Hands;
 using System.Collections.Generic;
+using System;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
+using System.Collections.Generic;
 
+using Unity.Mathematics;
+using UnityEngine;
+
+/// <summary>
+/// 基于 Unity.Mathematics 的 OneEuro 滤波器，用于 2D 向量
+/// </summary>
+sealed class OneEuroFilter2
+{
+    #region Public properties
+
+    public float Beta { get; set; }
+    public float MinCutoff { get; set; }
+
+    #endregion
+
+    #region Public step function
+
+    public float2 Step(float t, float2 x)
+    {
+        var t_e = t - _prev.t;
+
+        // Do nothing if the time difference is too small.
+        if (t_e < 1e-5f) return _prev.x;
+
+        var dx = (x - _prev.x) / t_e;
+        var dx_res = math.lerp(_prev.dx, dx, Alpha(t_e, DCutOff));
+
+        var cutoff = MinCutoff + Beta * math.length(dx_res);
+        var x_res = math.lerp(_prev.x, x, Alpha(t_e, cutoff));
+
+        _prev = (t, x_res, dx_res);
+
+        return x_res;
+    }
+
+    #endregion
+
+    #region Private class members
+
+    const float DCutOff = 1.0f;
+
+    static float Alpha(float t_e, float cutoff)
+    {
+        var r = 2 * math.PI * cutoff * t_e;
+        return r / (r + 1);
+    }
+
+    #endregion
+
+    #region Previous state variables as a tuple
+
+    (float t, float2 x, float2 dx) _prev;
+
+    #endregion
+}
+
+/// <summary>
+/// 扩展 OneEuroFilter2 以支持 3D 向量
+/// </summary>
+public sealed class OneEuroFilter3D
+{
+    private OneEuroFilter2 _filterX;
+    private OneEuroFilter2 _filterY;
+    private OneEuroFilter2 _filterZ;
+
+    /// <summary>
+    /// 创建一个新的 OneEuroFilter3D 实例
+    /// </summary>
+    /// <param name="minCutoff">最小截止频率 (默认: 1.0)</param>
+    /// <param name="beta">速度系数 (默认： 0.0)</param>
+    public OneEuroFilter3D(float minCutoff = 1.0f, float beta = 0.0f)
+    {
+        _filterX = new OneEuroFilter2 { MinCutoff = minCutoff, Beta = beta };
+        _filterY = new OneEuroFilter2 { MinCutoff = minCutoff, Beta = beta };
+        _filterZ = new OneEuroFilter2 { MinCutoff = minCutoff, Beta = beta };
+    }
+
+    /// <summary>
+    /// 应用滤波器到 Vector3
+    /// </summary>
+    /// <param name="time">当前时间</param>
+    /// <param name="value">输入向量</param>
+    /// <returns>滤波后的向量</returns>
+    public Vector3 Step(float time, Vector3 value)
+    {
+        float2 xy = _filterX.Step(time, new float2(value.x, value.y));
+        float2 zw = _filterY.Step(time, new float2(value.z, 0));
+        
+        return new Vector3(xy.x, xy.y, zw.x);
+    }
+
+    /// <summary>
+    /// 更新滤波器参数
+    /// </summary>
+    public void UpdateParams(float minCutoff, float beta)
+    {
+        _filterX.MinCutoff = minCutoff;
+        _filterX.Beta = beta;
+        
+        _filterY.MinCutoff = minCutoff;
+        _filterY.Beta = beta;
+        
+        _filterZ.MinCutoff = minCutoff;
+        _filterZ.Beta = beta;
+    }
+}
+
+/// <summary>
+/// 用于管理多个 OneEuroFilter3D 的容器类
+/// </summary>
+public class OneEuroFilter3DContainer
+{
+    private Dictionary<string, OneEuroFilter3D> _filters = new Dictionary<string, OneEuroFilter3D>();
+    private float _minCutoff;
+    private float _beta;
+
+    /// <summary>
+    /// 创建一个新的滤波器容器
+    /// </summary>
+    /// <param name="minCutoff">最小截止频率 (默认: 1.0)</param>
+    /// <param name="beta">速度系数 (默认: 0.0)</param>
+    public OneEuroFilter3DContainer(float minCutoff = 1.0f, float beta = 0.0f)
+    {
+        _minCutoff = minCutoff;
+        _beta = beta;
+    }
+
+    /// <summary>
+    /// 获取或创建指定键的滤波器
+    /// </summary>
+    public OneEuroFilter3D GetFilter(string key)
+    {
+        if (!_filters.TryGetValue(key, out OneEuroFilter3D filter))
+        {
+            filter = new OneEuroFilter3D(_minCutoff, _beta);
+            _filters[key] = filter;
+        }
+        return filter;
+    }
+
+    /// <summary>
+    /// 应用滤波器到 Vector3
+    /// </summary>
+    public Vector3 FilterVector3(string key, Vector3 value, float timestamp = -1.0f)
+    {
+        if (timestamp < 0)
+            timestamp = Time.time;
+            
+        return GetFilter(key).Step(timestamp, value);
+    }
+
+    /// <summary>
+    /// 更新所有滤波器的参数
+    /// </summary>
+    public void UpdateAllParams(float minCutoff, float beta)
+    {
+        _minCutoff = minCutoff;
+        _beta = beta;
+
+        foreach (var filter in _filters.Values)
+        {
+            filter.UpdateParams(minCutoff, beta);
+        }
+    }
+}
 public class HandRaycaster : MonoBehaviour
 {
     [Header("射线设置")]
@@ -21,6 +188,14 @@ public class HandRaycaster : MonoBehaviour
     
     [Header("手部追踪")]
     [SerializeField] private MyHand handTracker;
+    
+    [Header("OneEuro 滤波器设置")]
+    [SerializeField] private bool useFiltering = true;
+    [SerializeField] private float minCutoff = 1.0f;
+    [SerializeField] private float beta = 0.0f;
+    
+    // OneEuro 滤波器容器
+    private OneEuroFilter3DContainer filterContainer;
     
     // 手指关节ID定义
     private static readonly XRHandJointID[] TipJointIds = new[]
@@ -57,6 +232,9 @@ public class HandRaycaster : MonoBehaviour
             }
         }
         
+        // 初始化滤波器容器
+        filterContainer = new OneEuroFilter3DContainer(minCutoff, beta);
+        
         // 预创建所有手指的球体
         if (spawnSphereOnHit && spherePrefab != null)
         {
@@ -67,6 +245,12 @@ public class HandRaycaster : MonoBehaviour
     void Update()
     {
         if (handTracker == null) return;
+        
+        // 更新滤波器参数（如果在Inspector中修改了参数）
+        if (useFiltering)
+        {
+            filterContainer.UpdateAllParams(minCutoff, beta);
+        }
         
         // 对左右手分别进行射线检测
         PerformHandRaycast(Handedness.Left);
@@ -134,6 +318,7 @@ public class HandRaycaster : MonoBehaviour
                     if (spawnSphereOnHit)
                     {
                         UpdateFingerSphere(rayKey, hit.point, true);
+                        
                     }
                     
                     // 调用命中事件
@@ -160,6 +345,7 @@ public class HandRaycaster : MonoBehaviour
                     Color debugColor = lastHits.ContainsKey(rayKey) ? Color.green : rayColor;
                     Debug.DrawRay(tipPos, rayDirection * rayDistance, debugColor, rayDuration);
                 }
+                
                 LineRenderer lineRenderer;
                 int index;
                 if (handedness == Handedness.Left)
@@ -174,10 +360,19 @@ public class HandRaycaster : MonoBehaviour
                 index += fingerIndex;
 
                 lineRenderer = lineRenderers[index];
-                // lineRenderer.gameObject.SetActive(true); useless
                 Vector3 offset = Vector3.one*99*-1;
                 lineRenderer.SetPosition(0, ray.origin+offset);
-                lineRenderer.SetPosition(1, hit.point+offset);
+                
+                // 确保有命中点才设置第二个位置
+                if (lastHits.ContainsKey(rayKey))
+                {
+                    lineRenderer.SetPosition(1, hit.point+offset);
+                }
+                else
+                {
+                    // 没有命中时，显示射线最大距离
+                    lineRenderer.SetPosition(1, ray.origin + rayDirection * rayDistance + offset);
+                }
             }
             else
             {
@@ -213,7 +408,7 @@ public class HandRaycaster : MonoBehaviour
     }
     
     /// <summary>
-    /// 获取手指的Tip和Distal关节位置
+    /// 获取手指的Tip和Distal关节位置，应用OneEuro滤波
     /// </summary>
     /// <param name="handedness">手的类型</param>
     /// <param name="fingerIndex">手指索引（0-4）</param>
@@ -229,15 +424,38 @@ public class HandRaycaster : MonoBehaviour
         if (fingerIndex < 0 || fingerIndex >= TipJointIds.Length)
             return false;
         
+        string handName = handedness == Handedness.Left ? "Left" : "Right";
+        string fingerName = GetFingerName(fingerIndex);
+        
         // 获取Tip关节位置
         bool hasTip = handTracker.TryGetJointPositionAndVelocity(
-            handedness, TipJointIds[fingerIndex], out tipPosition, out _);
+            handedness, TipJointIds[fingerIndex], out Vector3 rawTipPosition, out _);
         
         // 获取Distal关节位置
         bool hasDistal = handTracker.TryGetJointPositionAndVelocity(
-            handedness, DistalJointIds[fingerIndex], out distalPosition, out _);
+            handedness, DistalJointIds[fingerIndex], out Vector3 rawDistalPosition, out _);
         
-        return hasTip && hasDistal;
+        if (hasTip && hasDistal)
+        {
+            // 应用OneEuro滤波（如果启用）
+            if (useFiltering)
+            {
+                string tipKey = $"{handName}_{fingerName}_Tip";
+                string distalKey = $"{handName}_{fingerName}_Distal";
+                
+                tipPosition = filterContainer.FilterVector3(tipKey, rawTipPosition);
+                distalPosition = filterContainer.FilterVector3(distalKey, rawDistalPosition);
+            }
+            else
+            {
+                tipPosition = rawTipPosition;
+                distalPosition = rawDistalPosition;
+            }
+            
+            return true;
+        }
+        
+        return false;
     }
     
     /// <summary>
@@ -251,7 +469,7 @@ public class HandRaycaster : MonoBehaviour
         string handName = handedness == Handedness.Left ? "Left" : "Right";
         string fingerName = GetFingerName(fingerIndex);
         
-        Debug.Log($"{handName} {fingerName} hit: {hit.collider.name} at {hit.point}");
+        // Debug.Log($"{handName} {fingerName} hit: {hit.collider.name} at {hit.point}");
     }
     
     /// <summary>
@@ -271,13 +489,45 @@ public class HandRaycaster : MonoBehaviour
             _ => "Unknown"
         };
     }
+
+    public static int FingerName2index(string fingerName)
+    {
+        return fingerName?.ToLower() switch
+        {
+            "thumb" => 0,
+            "index" => 1,
+            "middle" => 2,
+            "ring" => 3,
+            "little" => 4,
+            _ => -1  // Return -1 for unknown finger names
+        };
+    }
+    
+    /// <summary>
+    /// 启用或禁用滤波
+    /// </summary>
+    /// <param name="enable">是否启用</param>
+    public void SetFilteringEnabled(bool enable)
+    {
+        useFiltering = enable;
+    }
+    
+    /// <summary>
+    /// 更新滤波器参数
+    /// </summary>
+    public void UpdateFilterParams(float newMinCutoff, float newBeta)
+    {
+        minCutoff = newMinCutoff;
+        beta = newBeta;
+        
+        filterContainer.UpdateAllParams(minCutoff, beta);
+    }
+    
+    // 以下是原有方法，保持不变...
     
     /// <summary>
     /// 获取指定手指的球体GameObject
     /// </summary>
-    /// <param name="handedness">手的类型</param>
-    /// <param name="fingerIndex">手指索引</param>
-    /// <returns>球体GameObject，如果不存在返回null</returns>
     public GameObject GetFingerSphere(Handedness handedness, int fingerIndex)
     {
         string handName = handedness == Handedness.Left ? "Left" : "Right";
@@ -291,7 +541,6 @@ public class HandRaycaster : MonoBehaviour
     /// <summary>
     /// 获取所有手指球体
     /// </summary>
-    /// <returns>球体字典</returns>
     public Dictionary<string, GameObject> GetAllFingerSpheres()
     {
         return new Dictionary<string, GameObject>(fingerSpheres);
@@ -300,9 +549,6 @@ public class HandRaycaster : MonoBehaviour
     /// <summary>
     /// 手动显示/隐藏指定手指的球体
     /// </summary>
-    /// <param name="handedness">手的类型</param>
-    /// <param name="fingerIndex">手指索引</param>
-    /// <param name="show">是否显示</param>
     public void SetFingerSphereVisibility(Handedness handedness, int fingerIndex, bool show)
     {
         string handName = handedness == Handedness.Left ? "Left" : "Right";
@@ -318,7 +564,6 @@ public class HandRaycaster : MonoBehaviour
     /// <summary>
     /// 显示/隐藏所有球体
     /// </summary>
-    /// <param name="show">是否显示</param>
     public void SetAllSpheresVisibility(bool show)
     {
         foreach (var sphere in fingerSpheres.Values)
@@ -357,10 +602,6 @@ public class HandRaycaster : MonoBehaviour
     /// <summary>
     /// 获取指定手指的最后命中信息
     /// </summary>
-    /// <param name="handedness">手的类型</param>
-    /// <param name="fingerIndex">手指索引</param>
-    /// <param name="hit">输出命中信息</param>
-    /// <returns>是否有命中信息</returns>
     public bool TryGetFingerHit(Handedness handedness, int fingerIndex, out RaycastHit hit)
     {
         string handName = handedness == Handedness.Left ? "Left" : "Right";
@@ -373,7 +614,6 @@ public class HandRaycaster : MonoBehaviour
     /// <summary>
     /// 获取所有当前命中信息
     /// </summary>
-    /// <returns>命中信息字典</returns>
     public Dictionary<string, RaycastHit> GetAllHits()
     {
         return new Dictionary<string, RaycastHit>(lastHits);
@@ -390,7 +630,6 @@ public class HandRaycaster : MonoBehaviour
     /// <summary>
     /// 设置射线距离
     /// </summary>
-    /// <param name="distance">新的射线距离</param>
     public void SetRayDistance(float distance)
     {
         rayDistance = Mathf.Max(0.1f, distance);
@@ -399,7 +638,6 @@ public class HandRaycaster : MonoBehaviour
     /// <summary>
     /// 设置射线遮罩
     /// </summary>
-    /// <param name="mask">新的遮罩</param>
     public void SetRaycastMask(LayerMask mask)
     {
         raycastMask = mask;
@@ -408,7 +646,6 @@ public class HandRaycaster : MonoBehaviour
     /// <summary>
     /// 切换调试射线显示
     /// </summary>
-    /// <param name="show">是否显示</param>
     public void SetShowDebugRays(bool show)
     {
         showDebugRays = show;
@@ -417,7 +654,6 @@ public class HandRaycaster : MonoBehaviour
     /// <summary>
     /// 设置没有命中时是否隐藏球体
     /// </summary>
-    /// <param name="hide">是否隐藏</param>
     public void SetHideWhenNotHit(bool hide)
     {
         hideWhenNotHit = hide;

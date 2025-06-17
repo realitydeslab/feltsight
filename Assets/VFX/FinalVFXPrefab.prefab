@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 1603073628770527108}
   - component: {fileID: 7464370925962792158}
   - component: {fileID: 5008182679361157487}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: FinalVFXPrefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -51,19 +51,19 @@ VisualEffect:
   m_PropertySheet:
     m_Float:
       m_Array:
-      - m_Value: 0.003
+      - m_Value: 0.006
         m_Name: PointMaxSize
         m_Overridden: 1
-      - m_Value: 5
+      - m_Value: 10
         m_Name: DisappearTime
         m_Overridden: 1
       - m_Value: 5
         m_Name: StayTime
         m_Overridden: 1
-      - m_Value: 9999
+      - m_Value: 2
         m_Name: MaskBall
-        m_Overridden: 0
-      - m_Value: 0.05
+        m_Overridden: 1
+      - m_Value: 0.005
         m_Name: PointFloatRange
         m_Overridden: 1
     m_Vector2f:
@@ -77,7 +77,7 @@ VisualEffect:
       m_Array: []
     m_Uint:
       m_Array:
-      - m_Value: 20000
+      - m_Value: 10000
         m_Name: NumPointOfOneMesh
         m_Overridden: 1
     m_Int:

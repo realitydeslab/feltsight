@@ -78,7 +78,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7464370925962792158, guid: 77a60ef0488ce416a986caae729b7794, type: 3}
       propertyPath: m_PropertySheet.m_Uint.m_Array.Array.data[0].m_Value
-      value: 20000
+      value: 2000
       objectReference: {fileID: 0}
     - target: {fileID: 7464370925962792158, guid: 77a60ef0488ce416a986caae729b7794, type: 3}
       propertyPath: m_PropertySheet.m_Float.m_Array.Array.data[0].m_Value
@@ -86,7 +86,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7464370925962792158, guid: 77a60ef0488ce416a986caae729b7794, type: 3}
       propertyPath: m_PropertySheet.m_Float.m_Array.Array.data[1].m_Value
-      value: 5
+      value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 7464370925962792158, guid: 77a60ef0488ce416a986caae729b7794, type: 3}
       propertyPath: m_PropertySheet.m_Float.m_Array.Array.data[2].m_Value

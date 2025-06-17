@@ -20,7 +20,7 @@ public class BLESendJointV : MonoBehaviour
     private Handedness m_HandToUse = Handedness.Right;
 
     [SerializeField] [Tooltip("用于显示手指速度的文本组件")]
-    private TextMeshProUGUI m_VelocityText;
+    private Text m_VelocityText;
 
     [SerializeField] [Tooltip("用于调整速度倍率的Slider")]
     private UnityEngine.UI.Slider m_VelocitySlider;
@@ -570,20 +570,7 @@ public class BLESendJointV : MonoBehaviour
             }
         }
     }
-
-    /// <summary>
-    /// 设置用于显示速度的文本组件
-    /// </summary>
-    /// <param name="text">TextMeshProUGUI组件</param>
-    public void SetVelocityText(TextMeshProUGUI text)
-    {
-        m_VelocityText = text;
-        if (m_VelocityText != null)
-        {
-            m_VelocityText.text = "Ori V: 0.000 m/s\nFiltered V: 0.000 m/s\nPlay V: 1.0x\nFactor: 1.0\nVolume 75%";
-        }
-    }
-
+    
     /// <summary>
     /// 设置速度倍率滑块
     /// </summary>

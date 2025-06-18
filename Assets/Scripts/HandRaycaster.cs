@@ -1,12 +1,8 @@
 using UnityEngine;
 using UnityEngine.XR.Hands;
 using System.Collections.Generic;
-using System;
-using UnityEngine.XR.Interaction.Toolkit.Interactors;
-using System.Collections.Generic;
-
 using Unity.Mathematics;
-using UnityEngine;
+using UnityEngine.VFX;
 
 /// <summary>
 /// 基于 Unity.Mathematics 的 OneEuro 滤波器，用于 2D 向量
@@ -176,15 +172,12 @@ public class HandRaycaster : MonoBehaviour
     [SerializeField] private float rayDistance = 1.0f;
     [SerializeField] private LayerMask raycastMask = -1;
     [SerializeField] private bool showDebugRays = true;
-    [SerializeField] private Color rayColor = Color.red;
     [SerializeField] private float rayDuration = 0.1f;
     [Header("射线Visualize")]
     [SerializeField] LineRenderer[] lineRenderers; // From Left to Right, from damuzhi to xiaomuzhi
-    
-    [Header("球体生成设置")]
-    [SerializeField] private GameObject spherePrefab;
-    [SerializeField] private bool spawnSphereOnHit = true;
-    [SerializeField] private bool hideWhenNotHit = true; // 没有命中时是否隐藏球体
+    [SerializeField] Camera cam;
+    [SerializeField] private VisualEffect[] vfx;
+    [SerializeField] private VFXMan vv;
     
     [Header("手部追踪")]
     [SerializeField] private MyHand handTracker;
@@ -192,7 +185,11 @@ public class HandRaycaster : MonoBehaviour
     [Header("OneEuro 滤波器设置")]
     [SerializeField] private bool useFiltering = true;
     [SerializeField] private float minCutoff = 1.0f;
-    [SerializeField] private float beta = 0.0f;
+    [SerializeField] private float beta;
+
+    [Header("Debug Settings")] [SerializeField]
+    private bool isShowHitInfo;
+    
     
     // OneEuro 滤波器容器
     private OneEuroFilter3DContainer filterContainer;
@@ -218,14 +215,13 @@ public class HandRaycaster : MonoBehaviour
     
     // 存储射线命中信息和对应的球体
     public Dictionary<string, RaycastHit> lastHits = new Dictionary<string, RaycastHit>();
-    public Dictionary<string, GameObject> fingerSpheres = new Dictionary<string, GameObject>();
     
     void Start()
     {
         // 如果没有指定handTracker，尝试自动查找
         if (handTracker == null)
         {
-            handTracker = FindObjectOfType<MyHand>();
+            handTracker = FindFirstObjectByType<MyHand>();
             if (handTracker == null)
             {
                 Debug.LogError("HandRaycaster: 找不到MyHand组件！");
@@ -235,11 +231,6 @@ public class HandRaycaster : MonoBehaviour
         // 初始化滤波器容器
         filterContainer = new OneEuroFilter3DContainer(minCutoff, beta);
         
-        // 预创建所有手指的球体
-        if (spawnSphereOnHit && spherePrefab != null)
-        {
-            CreateAllFingerSpheres();
-        }
     }
     
     void Update()
@@ -256,34 +247,7 @@ public class HandRaycaster : MonoBehaviour
         PerformHandRaycast(Handedness.Left);
         PerformHandRaycast(Handedness.Right);
     }
-    
-    /// <summary>
-    /// 预创建所有手指的球体
-    /// </summary>
-    private void CreateAllFingerSpheres()
-    {
-        string[] handNames = { "Left", "Right" };
-        
-        foreach (string handName in handNames)
-        {
-            for (int fingerIndex = 0; fingerIndex < 5; fingerIndex++)
-            {
-                string fingerName = GetFingerName(fingerIndex);
-                string sphereKey = $"{handName}_{fingerName}";
-                
-                // 创建球体
-                GameObject sphere = Instantiate(spherePrefab);
-                sphere.name = $"FingerSphere_{sphereKey}";
-                sphere.transform.SetParent(transform); // 设置为当前对象的子物体
-                
-                // 初始时隐藏球体
-                sphere.SetActive(false);
-                
-                // 存储到字典中
-                fingerSpheres[sphereKey] = sphere;
-            }
-        }
-    }
+
     
     /// <summary>
     /// 对指定手进行射线检测
@@ -308,44 +272,6 @@ public class HandRaycaster : MonoBehaviour
                 // 从Tip位置发射射线
                 Ray ray = new Ray(tipPos, rayDirection);
                 
-                // 执行射线检测
-                if (Physics.Raycast(ray, out RaycastHit hit, rayDistance, raycastMask))
-                {
-                    // 存储命中信息
-                    lastHits[rayKey] = hit;
-                    
-                    // 更新球体位置（如果启用）
-                    if (spawnSphereOnHit)
-                    {
-                        UpdateFingerSphere(rayKey, hit.point, true);
-                        
-                    }
-                    
-                    // 调用命中事件
-                    OnFingerRayHit(handedness, fingerIndex, hit);
-                }
-                else
-                {
-                    // 移除之前的命中记录
-                    if (lastHits.ContainsKey(rayKey))
-                    {
-                        lastHits.Remove(rayKey);
-                    }
-                    
-                    // 隐藏球体（如果启用隐藏选项）
-                    if (spawnSphereOnHit && hideWhenNotHit)
-                    {
-                        UpdateFingerSphere(rayKey, Vector3.zero, false);
-                    }
-                }
-                
-                // 绘制调试射线
-                if (showDebugRays)
-                {
-                    Color debugColor = lastHits.ContainsKey(rayKey) ? Color.green : rayColor;
-                    Debug.DrawRay(tipPos, rayDirection * rayDistance, debugColor, rayDuration);
-                }
-                
                 LineRenderer lineRenderer;
                 int index;
                 if (handedness == Handedness.Left)
@@ -360,52 +286,61 @@ public class HandRaycaster : MonoBehaviour
                 index += fingerIndex;
 
                 lineRenderer = lineRenderers[index];
-                Vector3 offset = Vector3.one*99*-1;
-                lineRenderer.SetPosition(0, ray.origin+offset);
                 
-                // 确保有命中点才设置第二个位置
-                if (lastHits.ContainsKey(rayKey))
+                // 执行射线检测
+                if (Physics.Raycast(ray, out RaycastHit hit, rayDistance, raycastMask))
                 {
-                    lineRenderer.SetPosition(1, hit.point+offset);
+                    // 存储命中信息
+                    lastHits[rayKey] = hit;
+                    
+                    // Vector3 offset = Vector3.one * (99 * -1);
+                    Vector3 offset = Vector3.zero;
+                    lineRenderer.SetPosition(0, ray.origin+offset);
+                    if ((hit.point - cam.transform.position).magnitude < vv.ballRadius)
+                    {
+                        lineRenderer.SetPosition(1, hit.point+offset);
+                    }
+                    else
+                    {
+                        lineRenderer.SetPosition(1, ray.origin+offset+rayDirection*vv.ballRadius);
+                    }
+                    Debug.Log("Send to Hit VFX: "+hit.point);
+                    vfx[index].SetVector3("HitPosiiton",hit.point+offset );
+                    vfx[index].SetVector3("HitNormal",hit.point+hit.normal);
+                    vfx[index].SetBool("isHit",true);
+                    
+
+                    if (isShowHitInfo)
+                    {
+                        string hn=handedness == Handedness.Left ? "Left" : "Right";
+                        Debug.Log($"{hn} {GetFingerName(fingerIndex)} hit: {hit.collider.name} at {hit.point}");
+                    }
                 }
                 else
                 {
-                    // 没有命中时，显示射线最大距离
-                    lineRenderer.SetPosition(1, ray.origin + rayDirection * rayDistance + offset);
+                    vfx[index].SetBool("isHit",false);
+                    // 移除之前的命中记录
+                    if (lastHits.ContainsKey(rayKey))
+                    {
+                        lastHits.Remove(rayKey);
+                    }
                 }
-            }
-            else
-            {
-                // 如果无法获取关节位置，隐藏对应的球体
-                if (spawnSphereOnHit && hideWhenNotHit)
+                
+                // 绘制调试射线
+                if (showDebugRays)
                 {
-                    UpdateFingerSphere(rayKey, Vector3.zero, false);
+                    Color debugColor = lastHits.ContainsKey(rayKey) ? Color.green : Color.red;
+                    Debug.DrawRay(tipPos, rayDirection * rayDistance, debugColor, rayDuration);
                 }
+                
+                
+
+                
             }
+
         }
     }
     
-    /// <summary>
-    /// 更新手指球体的位置和显示状态
-    /// </summary>
-    /// <param name="sphereKey">球体标识符</param>
-    /// <param name="position">新位置</param>
-    /// <param name="show">是否显示</param>
-    private void UpdateFingerSphere(string sphereKey, Vector3 position, bool show)
-    {
-        if (fingerSpheres.TryGetValue(sphereKey, out GameObject sphere) && sphere != null)
-        {
-            if (show)
-            {
-                sphere.transform.position = position;
-                sphere.SetActive(true);
-            }
-            else
-            {
-                sphere.SetActive(false);
-            }
-        }
-    }
     
     /// <summary>
     /// 获取手指的Tip和Distal关节位置，应用OneEuro滤波
@@ -458,19 +393,6 @@ public class HandRaycaster : MonoBehaviour
         return false;
     }
     
-    /// <summary>
-    /// 手指射线命中事件
-    /// </summary>
-    /// <param name="handedness">手的类型</param>
-    /// <param name="fingerIndex">手指索引</param>
-    /// <param name="hit">命中信息</param>
-    protected virtual void OnFingerRayHit(Handedness handedness, int fingerIndex, RaycastHit hit)
-    {
-        string handName = handedness == Handedness.Left ? "Left" : "Right";
-        string fingerName = GetFingerName(fingerIndex);
-        
-        // Debug.Log($"{handName} {fingerName} hit: {hit.collider.name} at {hit.point}");
-    }
     
     /// <summary>
     /// 获取手指名称
@@ -522,82 +444,7 @@ public class HandRaycaster : MonoBehaviour
         
         filterContainer.UpdateAllParams(minCutoff, beta);
     }
-    
-    // 以下是原有方法，保持不变...
-    
-    /// <summary>
-    /// 获取指定手指的球体GameObject
-    /// </summary>
-    public GameObject GetFingerSphere(Handedness handedness, int fingerIndex)
-    {
-        string handName = handedness == Handedness.Left ? "Left" : "Right";
-        string fingerName = GetFingerName(fingerIndex);
-        string sphereKey = $"{handName}_{fingerName}";
-        
-        fingerSpheres.TryGetValue(sphereKey, out GameObject sphere);
-        return sphere;
-    }
-    
-    /// <summary>
-    /// 获取所有手指球体
-    /// </summary>
-    public Dictionary<string, GameObject> GetAllFingerSpheres()
-    {
-        return new Dictionary<string, GameObject>(fingerSpheres);
-    }
-    
-    /// <summary>
-    /// 手动显示/隐藏指定手指的球体
-    /// </summary>
-    public void SetFingerSphereVisibility(Handedness handedness, int fingerIndex, bool show)
-    {
-        string handName = handedness == Handedness.Left ? "Left" : "Right";
-        string fingerName = GetFingerName(fingerIndex);
-        string sphereKey = $"{handName}_{fingerName}";
-        
-        if (fingerSpheres.TryGetValue(sphereKey, out GameObject sphere) && sphere != null)
-        {
-            sphere.SetActive(show);
-        }
-    }
-    
-    /// <summary>
-    /// 显示/隐藏所有球体
-    /// </summary>
-    public void SetAllSpheresVisibility(bool show)
-    {
-        foreach (var sphere in fingerSpheres.Values)
-        {
-            if (sphere != null)
-            {
-                sphere.SetActive(show);
-            }
-        }
-    }
-    
-    /// <summary>
-    /// 重新创建所有球体（当spherePrefab改变时使用）
-    /// </summary>
-    [ContextMenu("Recreate All Spheres")]
-    public void RecreateAllSpheres()
-    {
-        // 销毁现有球体
-        foreach (var sphere in fingerSpheres.Values)
-        {
-            if (sphere != null)
-            {
-                DestroyImmediate(sphere);
-            }
-        }
-        
-        fingerSpheres.Clear();
-        
-        // 重新创建
-        if (spherePrefab != null)
-        {
-            CreateAllFingerSpheres();
-        }
-    }
+
     
     /// <summary>
     /// 获取指定手指的最后命中信息
@@ -651,24 +498,4 @@ public class HandRaycaster : MonoBehaviour
         showDebugRays = show;
     }
     
-    /// <summary>
-    /// 设置没有命中时是否隐藏球体
-    /// </summary>
-    public void SetHideWhenNotHit(bool hide)
-    {
-        hideWhenNotHit = hide;
-    }
-    
-    void OnDestroy()
-    {
-        // 清理所有球体
-        foreach (var sphere in fingerSpheres.Values)
-        {
-            if (sphere != null)
-            {
-                DestroyImmediate(sphere);
-            }
-        }
-        fingerSpheres.Clear();
-    }
 }

@@ -28,6 +28,7 @@ public class VFXMan : MonoBehaviour
     public bool isUseRealHandData = true;
     [SerializeField] private MyHand hand;
     [SerializeField] private HandRaycaster handRaycaster;
+    public float ballRadius;
     
     [Header("Debug UI")]
 [SerializeField] private Text TextShowHandsBall;
@@ -218,7 +219,6 @@ public class VFXMan : MonoBehaviour
             if (isUseRealHandData)
             {
                 // 半径 1 - 0.5 m 实测我的手20度到80度
-                float ballRadius;
                 if (hand.handsDistance < 0.1)
                 {
                     // 两只手根部贴在一起

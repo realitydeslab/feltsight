@@ -171,8 +171,7 @@ public class HandRaycaster : MonoBehaviour
     [Header("射线设置")]
     [SerializeField] private float rayDistance = 1.0f;
     [SerializeField] private LayerMask raycastMask = -1;
-    [SerializeField] private bool showDebugRays = true;
-    [SerializeField] private float rayDuration = 0.1f;
+
     [Header("射线Visualize")]
     [SerializeField] LineRenderer[] lineRenderers; // From Left to Right, from damuzhi to xiaomuzhi
     [SerializeField] Camera cam;
@@ -189,7 +188,8 @@ public class HandRaycaster : MonoBehaviour
 
     [Header("Debug Settings")] [SerializeField]
     private bool isShowHitInfo;
-    
+    [SerializeField] private bool showDebugRays = true;
+    [SerializeField] private float rayDuration = 0.1f;
     
     // OneEuro 滤波器容器
     private OneEuroFilter3DContainer filterContainer;

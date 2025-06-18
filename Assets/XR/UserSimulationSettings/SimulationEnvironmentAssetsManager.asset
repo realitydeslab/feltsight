@@ -14,11 +14,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_EnvironmentPrefabPaths:
   - Assets/Models/XREnv/XREnv_Room17.prefab
-  - Assets/UnityXRContent/ARFoundation/SimulationEnvironments/Bedroom/Bedroom_12ftx12ft.prefab
-  - Assets/UnityXRContent/ARFoundation/SimulationEnvironments/Bedroom/Bedroom_20ftx14ft.prefab
-  - Assets/UnityXRContent/ARFoundation/SimulationEnvironments/Bedroom/Bedroom_20ftx17ft.prefab
-  - Assets/UnityXRContent/ARFoundation/SimulationEnvironments/DiningRoom/DiningRoom_15ftx12.5ft.prefab
-  - Assets/UnityXRContent/ARFoundation/SimulationEnvironments/DiningRoom/DiningRoom_18ftx16ft.prefab
   - Assets/UnityXRContent/ARFoundation/SimulationEnvironments/LivingRoom/LivingRoom_17.5ftx16.5ft.prefab
   - Assets/UnityXRContent/ARFoundation/SimulationEnvironments/LivingRoom/LivingRoom_18ftx13ft.prefab
   - Assets/UnityXRContent/ARFoundation/SimulationEnvironments/LivingRoom/LivingRoom_20ftx18.5ft.prefab

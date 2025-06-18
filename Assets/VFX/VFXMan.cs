@@ -14,9 +14,9 @@ public class VFXMan : MonoBehaviour
 {
     private Dictionary<MeshFilter, VisualEffect> vfxMap = new Dictionary<MeshFilter, VisualEffect>();
     public GameObject vfxMeshPrefab; 
+    
     [Header("AR Mesh Settings")]
     public ARMeshManager meshManager;
-    
     
     [SerializeField, Tooltip("用于确定合并范围的相机")]
     private Camera viewCamera;
@@ -30,11 +30,22 @@ public class VFXMan : MonoBehaviour
     [SerializeField] private HandRaycaster handRaycaster;
     public float ballRadius;
     
+    [Header("Ballline Shader Settings")]
+    [SerializeField, Tooltip("线条宽度")]
+    private float lineWidth = 1.0f;
+    [SerializeField, Tooltip("自发光强度")]
+    private float emissionIntensity = 1.0f;
+    [SerializeField, Tooltip("距离偏移量")]
+    private float distanceOffset = 0f;
+    
     [Header("Debug UI")]
-[SerializeField] private Text TextShowHandsBall;
-
+    [SerializeField] private Text TextShowHandsBall;
     [SerializeField] private GameObject TransparentBallPrefab;
 
+    // Shader属性ID缓存（性能优化）
+    private static readonly int TargetDistanceID = Shader.PropertyToID("_TargetDistance");
+    private static readonly int LineWidthID = Shader.PropertyToID("_LineWidth");
+    private static readonly int EmissionIntensityID = Shader.PropertyToID("_EmissionIntensity");
     
     private Matrix4x4 lastTransformMatrix;
     private float nextMergeUpdateTime;
@@ -42,8 +53,6 @@ public class VFXMan : MonoBehaviour
     
     void Start()
     {
-
-        
         if (viewCamera == null)
         {
             viewCamera = Camera.main;
@@ -61,27 +70,88 @@ public class VFXMan : MonoBehaviour
                 Debug.LogError("找不到ARMeshManager，请手动指定");
             }
         }
+        
         #if UNITY_VISIONOS && !UNITY_EDITOR
             meshManager.subsystem.SetClassificationEnabled(true);
         #endif
         
         // 初始更新
         CreateVFX4Mesh();
-
     }
-    
     
     void Update()
     {
-        
         // 检查是否需要更新合并的mesh
         if (Time.time >= nextMergeUpdateTime)
         {
             nextMergeUpdateTime = Time.time + mergeUpdateInterval;
-            CreateVFX4Mesh();
+            CreateVFX4Mesh(); // 这里会调用GetNearbyMeshes()，从而更新材质属性
         }
-        
     }
+    
+    /// <summary>
+    /// 更新单个mesh的材质属性
+    /// </summary>
+    private void UpdateMeshMaterialProperties(MeshFilter meshFilter)
+    {
+        // 获取mesh的Renderer组件
+        Renderer meshRenderer = meshFilter.GetComponent<Renderer>();
+        if (meshRenderer == null) return;
+        
+        // 直接使用ballRadius + offset作为目标距离
+        float targetDistance = ballRadius + distanceOffset;
+        
+        // 使用MaterialPropertyBlock更新属性
+        MaterialPropertyBlock propertyBlock = new MaterialPropertyBlock();
+        meshRenderer.GetPropertyBlock(propertyBlock);
+        
+        propertyBlock.SetFloat(TargetDistanceID, targetDistance);
+        propertyBlock.SetFloat(LineWidthID, lineWidth);
+        propertyBlock.SetFloat(EmissionIntensityID, emissionIntensity);
+        
+        meshRenderer.SetPropertyBlock(propertyBlock);
+    }
+    
+    /// <summary>
+    /// 更新所有mesh材质的Target Distance（独立调用方法）
+    /// </summary>
+    private void UpdateAllMeshMaterialsTargetDistance()
+    {
+        if (meshManager == null) return;
+        
+        foreach (var meshFilter in meshManager.meshes)
+        {
+            if (meshFilter == null || meshFilter.mesh == null)
+                continue;
+                
+            UpdateMeshMaterialProperties(meshFilter);
+        }
+    }
+    
+    /// <summary>
+    /// 公共方法：手动设置ballRadius
+    /// </summary>
+    public void SetBallRadius(float newRadius)
+    {
+        ballRadius = newRadius;
+    }
+    
+    /// <summary>
+    /// 公共方法：设置线条宽度
+    /// </summary>
+    public void SetLineWidth(float width)
+    {
+        lineWidth = width;
+    }
+    
+    /// <summary>
+    /// 公共方法：设置自发光强度
+    /// </summary>
+    public void SetEmissionIntensity(float intensity)
+    {
+        emissionIntensity = intensity;
+    }
+    
     /// <summary>
     /// 将十六进制颜色字符串转换为Unity Color
     /// </summary>
@@ -120,6 +190,7 @@ public class VFXMan : MonoBehaviour
         Debug.LogError($"Invalid hex color format: {hex}");
         return Color.white;
     }
+    
     private Color[] getRandomColors()
     {
         Color[] colorset = new Color[4];
@@ -165,11 +236,7 @@ public class VFXMan : MonoBehaviour
         }
         
         return colorset;
-
-
-        
     }
-    
     
     private void CreateVFX4Mesh()
     {
@@ -178,7 +245,7 @@ public class VFXMan : MonoBehaviour
             return;
         }
         
-        // 获取相机周围的mesh
+        // 获取相机周围的mesh（同时更新材质属性）
         List<MeshFilter> nearbyMeshes = GetNearbyMeshes();
         
         if (nearbyMeshes.Count == 0)
@@ -202,10 +269,8 @@ public class VFXMan : MonoBehaviour
         {
             if (!vfxMap.ContainsKey(mf))
             {
-                // var go = Instantiate(vfxMeshPrefab, Vector3.zero, Quaternion.identity, this.transform);
                 var go = Instantiate(vfxMeshPrefab, this.transform);
                 var ve = go.GetComponent<VisualEffect>();
-                // ve.SetVector3();
                 vfxMap[mf] = ve;
             }
 
@@ -225,7 +290,6 @@ public class VFXMan : MonoBehaviour
                     ballRadius = (float)((hand.palmAngle - 20) / 40.0 * 0.5 + 0.5);
                     ballRadius = (float)math.max(ballRadius, 0.5);
                     ballRadius = (float)math.min(ballRadius, 1.0);
-
                 }
                 else
                 {
@@ -236,9 +300,12 @@ public class VFXMan : MonoBehaviour
                 if (TextShowHandsBall)
                 {
                     TextShowHandsBall.text = $"Hands control ball radius: {ballRadius} m";
-                    // GameObject.Instantiate(TransparentBallPrefab)
-
                 }
+            }
+            else
+            {
+                    ballRadius = 2.0f;
+                
             }
 
             foreach (var hitinfo in handRaycaster.lastHits)
@@ -251,44 +318,27 @@ public class VFXMan : MonoBehaviour
                 vfxIndexInside += HandRaycaster.FingerName2index(fingerName);
                 vfxInst.SetVector3($"finger {vfxIndexInside+1}", hitinfo.Value.point);
                 vfxInst.SetVector3($"fingerNormal {vfxIndexInside+1}", hitinfo.Value.normal);
-
             }
-            
-            
-
         }
-        
-        
     }
     
     private List<MeshFilter> GetNearbyMeshes()
     {
         List<MeshFilter> nearbyMeshes = new List<MeshFilter>();
-        Vector3 cameraPosition = viewCamera.transform.position;
-        
         
         foreach (var meshFilter in meshManager.meshes)
         {
             if (meshFilter == null || meshFilter.mesh == null)
                 continue;
             
+            // 更新当前mesh的材质属性
+            UpdateMeshMaterialProperties(meshFilter);
+            
             nearbyMeshes.Add(meshFilter);
         }
-        //
-        // // 按距离排序，优先处理近的mesh
-        // nearbyMeshes.Sort((a, b) => 
-        // {
-        //     // float distA = Vector3.Distance(cameraPosition, CalculateMeshCenter(a));
-        //     // float distB = Vector3.Distance(cameraPosition, CalculateMeshCenter(b));
-        //
-        //
-        //     // ;
-        //     return a.mesh.vertexCount.CompareTo(b.mesh.vertexCount);
-        // });
         
         return nearbyMeshes;
     }
-    
 
     [ContextMenu("手动构建VFX")]
     public void ForceUpdateCombinedMesh()
@@ -296,5 +346,9 @@ public class VFXMan : MonoBehaviour
         CreateVFX4Mesh();
     }
     
-
+    [ContextMenu("手动更新材质距离")]
+    public void ForceUpdateMaterialDistance()
+    {
+        UpdateAllMeshMaterialsTargetDistance();
+    }
 }

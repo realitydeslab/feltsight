@@ -60,6 +60,8 @@ Shader "VFX/Ballline_URP"
                 float3 normalOS : NORMAL;
                 float4 tangentOS : TANGENT;
                 float2 uv : TEXCOORD0;
+
+                UNITY_VERTEX_INPUT_INSTANCE_ID //Insert
             };
             
             struct Varyings
@@ -70,11 +72,17 @@ Shader "VFX/Ballline_URP"
                 float3 normalWS : TEXCOORD2;
                 float4 tangentWS : TEXCOORD3;
                 float3 viewDirWS : TEXCOORD4;
+
+                UNITY_VERTEX_OUTPUT_STEREO //Insert
             };
             
             Varyings vert(Attributes input)
             {
                 Varyings output = (Varyings)0;
+
+                UNITY_SETUP_INSTANCE_ID(input); //Insert
+                UNITY_INITIALIZE_OUTPUT(Varyings, output); //Insert
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output); //Insert
                 
                 VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
                 VertexNormalInputs normalInput = GetVertexNormalInputs(input.normalOS, input.tangentOS);
@@ -94,14 +102,28 @@ Shader "VFX/Ballline_URP"
                 // 计算当前像素到摄像机的距离
                 float currentDepth = distance(_WorldSpaceCameraPos, input.positionWS);
                 
-                // 计算距离目标距离的偏差
-                float distanceFromTarget = abs(currentDepth - _TargetDistance);
+                // 计算相对于目标距离的偏差
+                float distanceFromTarget = currentDepth - _TargetDistance;
                 
-                // 使用smoothstep创建平滑的alpha渐变
-                float alpha = 1.0 - smoothstep(0, _LineWidth * 0.5, distanceFromTarget);
+                float alpha = 0.0;
                 
-                // 应用渐变锐度控制
-                alpha = pow(alpha, _FadeSharpness);
+                // 如果超过目标距离（远离相机一侧），直接截断
+                if (distanceFromTarget > 0)
+                {
+                    discard;
+                }
+                else
+                {
+                    // 在靠近相机一侧创建渐变
+                    // distanceFromTarget为负值，表示比目标距离更近
+                    float fadeDistance = abs(distanceFromTarget);
+                    
+                    // 使用smoothstep创建平滑的alpha渐变
+                    alpha = 1.0 - smoothstep(0, _LineWidth * 0.5, fadeDistance);
+                    
+                    // 应用渐变锐度控制
+                    alpha = pow(alpha, _FadeSharpness);
+                }
                 
                 // 如果alpha太小，直接丢弃片元
                 if (alpha < 0.01)
@@ -158,12 +180,16 @@ Shader "VFX/Ballline_URP"
             struct Attributes
             {
                 float4 positionOS : POSITION;
+
+                UNITY_VERTEX_INPUT_INSTANCE_ID //Insert
             };
             
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
                 float3 positionWS : TEXCOORD0;
+
+                UNITY_VERTEX_OUTPUT_STEREO //Insert
             };
             
             Varyings vert(Attributes input)
@@ -178,8 +204,14 @@ Shader "VFX/Ballline_URP"
             float4 frag(Varyings input) : SV_Target
             {
                 float currentDepth = distance(_WorldSpaceCameraPos, input.positionWS);
-                float distanceFromTarget = abs(currentDepth - _TargetDistance);
-                float alpha = 1.0 - smoothstep(0, _LineWidth * 0.5, distanceFromTarget);
+                float distanceFromTarget = currentDepth - _TargetDistance;
+                
+                // 如果超过目标距离，直接丢弃
+                if (distanceFromTarget > 0)
+                    discard;
+                
+                float fadeDistance = abs(distanceFromTarget);
+                float alpha = 1.0 - smoothstep(0, _LineWidth * 0.5, fadeDistance);
                 alpha = pow(alpha, _FadeSharpness);
                 
                 if (alpha < 0.01)

@@ -288,22 +288,16 @@ public class HandRaycaster : MonoBehaviour
                 lineRenderer = lineRenderers[index];
                 
                 // 执行射线检测
-                if (Physics.Raycast(ray, out RaycastHit hit, rayDistance, raycastMask))
+                    Vector3 offset = Vector3.zero;
+                lineRenderer.SetPosition(0, ray.origin+offset);
+                if (Physics.Raycast(ray, out RaycastHit hit, vv.ballRadius, raycastMask))
                 {
                     // 存储命中信息
                     lastHits[rayKey] = hit;
                     
                     // Vector3 offset = Vector3.one * (99 * -1);
-                    Vector3 offset = Vector3.zero;
-                    lineRenderer.SetPosition(0, ray.origin+offset);
-                    if ((hit.point - cam.transform.position).magnitude < vv.ballRadius)
-                    {
                         lineRenderer.SetPosition(1, hit.point+offset);
-                    }
-                    else
-                    {
-                        lineRenderer.SetPosition(1, ray.origin+offset+rayDirection*vv.ballRadius);
-                    }
+
                     Debug.Log("Send to Hit VFX: "+hit.point);
                     vfx[index].SetVector3("HitPosiiton",hit.point+offset );
                     vfx[index].SetVector3("HitNormal",hit.point+hit.normal);
@@ -318,6 +312,7 @@ public class HandRaycaster : MonoBehaviour
                 }
                 else
                 {
+                    lineRenderer.SetPosition(1, ray.origin+offset+rayDirection*vv.ballRadius);
                     vfx[index].SetBool("isHit",false);
                     // 移除之前的命中记录
                     if (lastHits.ContainsKey(rayKey))

@@ -9661,7 +9661,7 @@ MonoBehaviour:
   meshManager: {fileID: 61714185}
   viewCamera: {fileID: 1732320013}
   mergeUpdateInterval: 0.2
-  isUseRealHandData: 1
+  isUseRealHandData: 0
   hand: {fileID: 1461729648}
   handRaycaster: {fileID: 385671792}
   ballRadius: 0

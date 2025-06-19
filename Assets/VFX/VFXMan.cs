@@ -25,7 +25,14 @@ public class VFXMan : MonoBehaviour
     private float mergeUpdateInterval = 0.5f;
 
     [Header("Hand Data")] 
-    public bool isUseRealHandData = true;
+    # if UNITY_EDITOR
+    bool isUseRealHandData = true;
+    #endif
+    #if !UNITY_EDITOR && UNITY_VISIONOS
+    bool isUseRealHandData = false;
+    #endif
+    
+    
     [SerializeField] private MyHand hand;
     [SerializeField] private HandRaycaster handRaycaster;
     public float ballRadius;

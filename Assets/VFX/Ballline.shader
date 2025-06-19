@@ -10,6 +10,7 @@ Shader "VFX/Ballline_URP"
         _TargetDistance ("Target Distance", Float) = 10.0
         _LineWidth ("Line Width", Range(0.1, 5.0)) = 1.0
         _FadeSharpness ("Fade Sharpness", Range(0.1, 5.0)) = 1.0
+        _MaxAlpha ("Max Alpha", Range(0, 1)) = 1.0  // 新增参数
     }
     
     SubShader
@@ -52,6 +53,7 @@ Shader "VFX/Ballline_URP"
                 float _TargetDistance;
                 float _LineWidth;
                 float _FadeSharpness;
+                float _MaxAlpha;  // 新增变量
             CBUFFER_END
             
             struct Attributes
@@ -81,7 +83,6 @@ Shader "VFX/Ballline_URP"
                 Varyings output = (Varyings)0;
 
                 UNITY_SETUP_INSTANCE_ID(input); //Insert
-                UNITY_INITIALIZE_OUTPUT(Varyings, output); //Insert
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output); //Insert
                 
                 VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
@@ -99,6 +100,7 @@ Shader "VFX/Ballline_URP"
             
             float4 frag(Varyings input) : SV_Target
             {
+
                 // 计算当前像素到摄像机的距离
                 float currentDepth = distance(_WorldSpaceCameraPos, input.positionWS);
                 
@@ -123,6 +125,9 @@ Shader "VFX/Ballline_URP"
                     
                     // 应用渐变锐度控制
                     alpha = pow(alpha, _FadeSharpness);
+                    
+                    // 应用最大alpha限制
+                    alpha *= _MaxAlpha;
                 }
                 
                 // 如果alpha太小，直接丢弃片元
@@ -175,6 +180,7 @@ Shader "VFX/Ballline_URP"
                 float _TargetDistance;
                 float _LineWidth;
                 float _FadeSharpness;
+                float _MaxAlpha;  // 新增变量
             CBUFFER_END
             
             struct Attributes
@@ -213,6 +219,9 @@ Shader "VFX/Ballline_URP"
                 float fadeDistance = abs(distanceFromTarget);
                 float alpha = 1.0 - smoothstep(0, _LineWidth * 0.5, fadeDistance);
                 alpha = pow(alpha, _FadeSharpness);
+                
+                // 应用最大alpha限制
+                alpha *= _MaxAlpha;
                 
                 if (alpha < 0.01)
                     discard;

@@ -1104,7 +1104,7 @@ MonoBehaviour:
       serializedVersion: 2
       x: 1684
       y: 1792
-      width: 845
+      width: 835
       height: 650
     contents:
     - model: {fileID: 114350483966678264}
@@ -1474,10 +1474,10 @@ MonoBehaviour:
   - title: Random Move
     position:
       serializedVersion: 2
-      x: 3703
-      y: 1146
+      x: 3631
+      y: 1052
       width: 759
-      height: 349
+      height: 257
     contents:
     - model: {fileID: 114350483966678933}
       id: 0
@@ -32879,7 +32879,7 @@ MonoBehaviour:
   m_UIIgnoredErrors: []
   m_Parent: {fileID: 114350483966674976}
   m_Children: []
-  m_UIPosition: {x: 2379, y: 2158}
+  m_UIPosition: {x: 2349, y: 2203}
   m_UICollapsed: 0
   m_UISuperCollapsed: 1
   m_InputSlots:
@@ -39861,7 +39861,7 @@ MonoBehaviour:
   m_UIIgnoredErrors: []
   m_Parent: {fileID: 114350483966674976}
   m_Children: []
-  m_UIPosition: {x: 3923, y: 1205}
+  m_UIPosition: {x: 3851, y: 1111}
   m_UICollapsed: 0
   m_UISuperCollapsed: 1
   m_InputSlots:
@@ -40299,7 +40299,7 @@ MonoBehaviour:
   m_UIIgnoredErrors: []
   m_Parent: {fileID: 114350483966674976}
   m_Children: []
-  m_UIPosition: {x: 4160, y: 1267}
+  m_UIPosition: {x: 4088, y: 1173}
   m_UICollapsed: 0
   m_UISuperCollapsed: 0
   m_InputSlots:
@@ -41057,7 +41057,7 @@ MonoBehaviour:
   m_UIIgnoredErrors: []
   m_Parent: {fileID: 114350483966674976}
   m_Children: []
-  m_UIPosition: {x: 3932, y: 1305}
+  m_UIPosition: {x: 3860, y: 1211}
   m_UICollapsed: 0
   m_UISuperCollapsed: 1
   m_InputSlots:
@@ -41225,7 +41225,7 @@ MonoBehaviour:
   m_UIIgnoredErrors: []
   m_Parent: {fileID: 114350483966674976}
   m_Children: []
-  m_UIPosition: {x: 3728, y: 1305}
+  m_UIPosition: {x: 3656, y: 1211}
   m_UICollapsed: 0
   m_UISuperCollapsed: 1
   m_InputSlots: []
@@ -58960,7 +58960,7 @@ MonoBehaviour:
       m_Type:
         m_SerializableType: System.Single, mscorlib, Version=4.0.0.0, Culture=neutral,
           PublicKeyToken=b77a5c561934e089
-      m_SerializableObject: 6
+      m_SerializableObject: 3
     m_Space: -1
   m_Property:
     name: Max

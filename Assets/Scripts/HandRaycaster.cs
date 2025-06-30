@@ -290,7 +290,7 @@ public class HandRaycaster : MonoBehaviour
                 // 执行射线检测
                     Vector3 offset = Vector3.zero;
                 lineRenderer.SetPosition(0, ray.origin+offset);
-                if (Physics.Raycast(ray, out RaycastHit hit, vv.ballRadius, raycastMask))
+                if (Physics.Raycast(ray, out RaycastHit hit, (float)(vv.ballRadius), raycastMask))
                 {
                     // 存储命中信息
                     lastHits[rayKey] = hit;
@@ -301,6 +301,7 @@ public class HandRaycaster : MonoBehaviour
                     Debug.Log("Send to Hit VFX: "+hit.point);
                     vfx[index].SetVector3("HitPosiiton",hit.point+offset );
                     vfx[index].SetVector3("HitNormal",hit.point+hit.normal);
+                    vfx[index].SetFloat("BallRaidus``.+++++",vv.ballRadius);
                     vfx[index].SetBool("isHit",true);
                     
 

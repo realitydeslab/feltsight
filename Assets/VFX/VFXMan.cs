@@ -26,10 +26,10 @@ public class VFXMan : MonoBehaviour
 
     [Header("Hand Data")] 
     # if UNITY_EDITOR
-    bool isUseRealHandData = true;
+    bool isUseRealHandData =  false;
     #endif
     #if !UNITY_EDITOR && UNITY_VISIONOS
-    bool isUseRealHandData = false;
+    bool isUseRealHandData = true ;
     #endif
     
     

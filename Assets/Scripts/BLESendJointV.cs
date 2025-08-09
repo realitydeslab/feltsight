@@ -10,6 +10,7 @@ using UnityEngine.XR.Hands;
 /// 速度0~0.3 m/s线性映射到1.0x~4.0x速度(10-40)
 /// 添加了OneDollar滤波器来平滑速度数据
 /// 当原始速度小于0.015时，音量设置为0
+/// 添加了自动重连功能，当蓝牙连接中断时自动尝试重新连接
 /// </summary>
 public class BLESendJointV : MonoBehaviour
 {
@@ -68,6 +69,25 @@ public class BLESendJointV : MonoBehaviour
     [SerializeField] [Tooltip("用于调整速度滤波强度的Slider")]
     private UnityEngine.UI.Slider m_FilterStrengthSlider;
 
+    [Header("蓝牙连接设置")]
+    [SerializeField] [Tooltip("蓝牙设备名称，多个名称用逗号分隔")]
+    private string m_DeviceName = "ESP32-BLE,FeltSight BLE";
+
+    [SerializeField] [Tooltip("断开连接后自动重连")]
+    private bool m_AutoReconnect = true;
+
+    [SerializeField] [Tooltip("重连尝试间隔（秒）")]
+    private float m_ReconnectInterval = 3.0f;
+
+    [SerializeField] [Tooltip("最大重连尝试次数，0表示无限次")]
+    private int m_MaxReconnectAttempts = 0;
+
+    [SerializeField] [Tooltip("显示连接状态的文本组件")]
+    private Text m_ConnectionStatusText;
+
+    [SerializeField] [Tooltip("连续发送失败次数阈值，超过此值触发重连")]
+    private int m_FailureThreshold = 3;
+
     private CoreBluetoothManager m_Manager;
     private CoreBluetoothCharacteristic m_Characteristic;
     private bool m_IsConnectedAndReady = false;
@@ -78,6 +98,16 @@ public class BLESendJointV : MonoBehaviour
     private byte m_CurrentVolume = 75; // 当前音量
     private float m_VelocityMultiplier = 1.0f; // 速度倍率
     
+    // 连接状态管理
+    private bool m_IsConnecting = false;
+    private bool m_IsReconnecting = false;
+    private int m_ReconnectAttempts = 0;
+    private Coroutine m_ReconnectCoroutine = null;
+    private CoreBluetoothPeripheral m_ConnectedPeripheral = null;
+    private string[] m_TargetDeviceNames;
+    private int m_ConsecutiveFailures = 0;
+    private System.DateTime m_LastSuccessfulSend = System.DateTime.Now;
+    private bool m_ConnectionLost = false;
 
     // 用于显示原始数据和滤波后数据的对比
     private Vector3 m_RawVelocity = Vector3.zero;
@@ -86,11 +116,25 @@ public class BLESendJointV : MonoBehaviour
     private float m_FilteredMagnitude = 0f;
 
     // 最小速度和最大速度的字节值
-    private const byte MIN_SPEED_BYTE = 10; // 1.©
+    private const byte MIN_SPEED_BYTE = 10; // 1.0x
     private const byte MAX_SPEED_BYTE = 40; // 4.0x速度
 
     void Start()
     {
+        // 处理设备名称列表
+        if (!string.IsNullOrEmpty(m_DeviceName))
+        {
+            m_TargetDeviceNames = m_DeviceName.Split(',');
+            for (int i = 0; i < m_TargetDeviceNames.Length; i++)
+            {
+                m_TargetDeviceNames[i] = m_TargetDeviceNames[i].Trim();
+            }
+        }
+        else
+        {
+            m_TargetDeviceNames = new string[] { "ESP32-BLE", "FeltSight BLE" };
+        }
+
         // 初始化OneDollar滤波器
         InitializeFilters();
 
@@ -120,12 +164,18 @@ public class BLESendJointV : MonoBehaviour
 
         // 初始化BLE
         InitializeBLE();
+        
+        // 更新连接状态UI
+        UpdateConnectionStatusUI("初始化中...");
     }
 
     void Update()
     {
         // 更新食指尖速度并映射到速度值
         UpdateFingerVelocityAndSpeed();
+        
+        // 检查连接状态
+        CheckConnectionStatus();
     }
 
     void OnDestroy()
@@ -142,6 +192,8 @@ public class BLESendJointV : MonoBehaviour
         }
 
         StopDataTransmission();
+        StopReconnectProcess();
+        
         if (m_Manager != null)
         {
             m_Manager.Stop();
@@ -153,7 +205,6 @@ public class BLESendJointV : MonoBehaviour
     /// </summary>
     private void InitializeFilters()
     {
-
         Debug.Log($"OneDollar filters initialized - Velocity filter strength: {m_VelocityFilterStrength}, Magnitude filter strength: {m_MagnitudeFilterStrength}");
     }
 
@@ -167,75 +218,108 @@ public class BLESendJointV : MonoBehaviour
         {
             m_Manager = CoreBluetoothManager.Shared;
 
-        m_Manager.OnUpdateState((string state) =>
-        {
-            Debug.Log("BLE state: " + state);
-            if (state != "poweredOn") return;
-            m_Manager.StartScan();
-        });
-
-        m_Manager.OnDiscoverPeripheral((CoreBluetoothPeripheral peripheral) =>
-        {
-            if (peripheral.name != "" && peripheral.name != null && peripheral.name != "(null-name)" && peripheral.name != "null-name")
+            m_Manager.OnUpdateState((string state) =>
             {
-                Debug.Log("Device discovered: " + peripheral.name);
-            }
-
-            if (peripheral.name != "ESP32-BLE" && peripheral.name != "FeltSight BLE") return;
-
-            m_Manager.StopScan();
-            m_IsScanStopped = true;
-            Debug.Log("Scan stopped, preparing to connect to device");
-            m_Manager.ConnectToPeripheral(peripheral);
-        });
-
-        m_Manager.OnConnectPeripheral((CoreBluetoothPeripheral peripheral) =>
-        {
-            Debug.Log("Connected to device: " + peripheral.name);
-            peripheral.discoverServices();
-        });
-
-        m_Manager.OnDiscoverService((CoreBluetoothService service) =>
-        {
-            Debug.Log("Service UUID discovered: " + service.uuid);
-            // ESP32服务UUID
-            if (service.uuid.ToUpper() != "6E400001-B5A3-F393-E0A9-E50E24DCCA9E") return;
-            service.discoverCharacteristics();
-        });
-
-        m_Manager.OnDiscoverCharacteristic((CoreBluetoothCharacteristic characteristic) =>
-        {
-            string uuid = characteristic.Uuid.ToUpper();
-            string[] usage = characteristic.Propertis;
-            Debug.Log("Characteristic UUID discovered: " + uuid + ", Usage: " + string.Join(",", usage));
-
-            // 查找RX特征（用于写入数据到ESP32）
-            if (uuid == "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
-            {
-                m_Characteristic = characteristic;
-                Debug.Log("RX characteristic found, ready to send data");
-
-                // 确保扫描已停止后才设置连接就绪状态
-                m_IsConnectedAndReady = true;
-
-                // 确保不会重复启动数据发送
-                if (m_DataSendCoroutine == null)
+                Debug.Log("BLE state: " + state);
+                UpdateConnectionStatusUI("BLE状态: " + state);
+                
+                if (state != "poweredOn") return;
+                
+                // 只有在非重连状态下才自动开始扫描
+                if (!m_IsReconnecting)
                 {
-                    Debug.Log("Scan stopped, starting data transmission");
-                    StartDataTransmission();
+                    StartScan();
                 }
-            }
+            });
 
-            // 处理TX特征（用于接收ESP32的数据）
-            if (uuid == "6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
+            m_Manager.OnDiscoverPeripheral((CoreBluetoothPeripheral peripheral) =>
             {
-                for (int i = 0; i < usage.Length; i++)
+                if (peripheral.name != "" && peripheral.name != null && peripheral.name != "(null-name)" && peripheral.name != "null-name")
                 {
-                    if (usage[i] == "notify")
-                        characteristic.SetNotifyValue(true);
+                    Debug.Log("Device discovered: " + peripheral.name);
                 }
-            }
-        });
+
+                // 检查设备名称是否在目标列表中
+                bool isTargetDevice = false;
+                foreach (string deviceName in m_TargetDeviceNames)
+                {
+                    if (peripheral.name == deviceName)
+                    {
+                        isTargetDevice = true;
+                        break;
+                    }
+                }
+
+                if (!isTargetDevice) return;
+
+                m_Manager.StopScan();
+                m_IsScanStopped = true;
+                m_IsConnecting = true;
+                
+                Debug.Log("Scan stopped, preparing to connect to device: " + peripheral.name);
+                UpdateConnectionStatusUI("正在连接到: " + peripheral.name);
+                
+                m_Manager.ConnectToPeripheral(peripheral);
+            });
+
+            m_Manager.OnConnectPeripheral((CoreBluetoothPeripheral peripheral) =>
+            {
+                m_ConnectedPeripheral = peripheral;
+                m_IsConnecting = false;
+                m_IsReconnecting = false;
+                m_ReconnectAttempts = 0;
+                m_ConsecutiveFailures = 0;
+                m_ConnectionLost = false;
+                
+                Debug.Log("Connected to device: " + peripheral.name);
+                UpdateConnectionStatusUI("已连接: " + peripheral.name);
+                
+                peripheral.discoverServices();
+            });
+
+            m_Manager.OnDiscoverService((CoreBluetoothService service) =>
+            {
+                Debug.Log("Service UUID discovered: " + service.uuid);
+                // ESP32服务UUID
+                if (service.uuid.ToUpper() != "6E400001-B5A3-F393-E0A9-E50E24DCCA9E") return;
+                service.discoverCharacteristics();
+            });
+
+            m_Manager.OnDiscoverCharacteristic((CoreBluetoothCharacteristic characteristic) =>
+            {
+                string uuid = characteristic.Uuid.ToUpper();
+                string[] usage = characteristic.Propertis;
+                Debug.Log("Characteristic UUID discovered: " + uuid + ", Usage: " + string.Join(",", usage));
+
+                // 查找RX特征（用于写入数据到ESP32）
+                if (uuid == "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+                {
+                    m_Characteristic = characteristic;
+                    Debug.Log("RX characteristic found, ready to send data");
+                    UpdateConnectionStatusUI("已连接并就绪");
+
+                    // 确保扫描已停止后才设置连接就绪状态
+                    m_IsConnectedAndReady = true;
+                    m_LastSuccessfulSend = System.DateTime.Now;
+
+                    // 确保不会重复启动数据发送
+                    if (m_DataSendCoroutine == null)
+                    {
+                        Debug.Log("Scan stopped, starting data transmission");
+                        StartDataTransmission();
+                    }
+                }
+
+                // 处理TX特征（用于接收ESP32的数据）
+                if (uuid == "6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
+                {
+                    for (int i = 0; i < usage.Length; i++)
+                    {
+                        if (usage[i] == "notify")
+                            characteristic.SetNotifyValue(true);
+                    }
+                }
+            });
 
             m_Manager.Start();
         }
@@ -243,6 +327,171 @@ public class BLESendJointV : MonoBehaviour
         {
             // 记录初始化错误但允许程序继续运行
             Debug.LogError($"BLE initialization failed, but main process continues: {e.Message}");
+            UpdateConnectionStatusUI("BLE初始化失败: " + e.Message);
+        }
+    }
+
+    /// <summary>
+    /// 检查连接状态，如果长时间没有成功发送数据，认为连接已断开
+    /// </summary>
+    private void CheckConnectionStatus()
+    {
+        // 如果已标记为连接丢失或正在重连，则跳过检查
+        if (m_ConnectionLost || m_IsReconnecting || !m_IsConnectedAndReady)
+            return;
+            
+        // 检查距离上次成功发送数据的时间
+        double secondsSinceLastSuccess = (System.DateTime.Now - m_LastSuccessfulSend).TotalSeconds;
+        
+        // 如果超过发送间隔的5倍，且连续失败次数超过阈值，认为连接已断开
+        if (secondsSinceLastSuccess > m_SendInterval * 5 && m_ConsecutiveFailures >= m_FailureThreshold)
+        {
+            Debug.Log($"Connection appears to be lost: {m_ConsecutiveFailures} consecutive failures, " +
+                     $"{secondsSinceLastSuccess:F1}s since last successful send");
+            
+            m_ConnectionLost = true;
+            m_IsConnectedAndReady = false;
+            
+            // 如果启用了自动重连，开始重连过程
+            if (m_AutoReconnect)
+            {
+                UpdateConnectionStatusUI("连接已断开，正在尝试重连...");
+                StartReconnectProcess();
+            }
+            else
+            {
+                UpdateConnectionStatusUI("连接已断开");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 开始扫描蓝牙设备
+    /// </summary>
+    private void StartScan()
+    {
+        if (m_Manager == null) return;
+        
+        try
+        {
+            m_IsScanStopped = false;
+            Debug.Log("Starting BLE scan...");
+            UpdateConnectionStatusUI("正在扫描设备...");
+            m_Manager.StartScan();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Failed to start scan: {e.Message}");
+            UpdateConnectionStatusUI("扫描失败: " + e.Message);
+        }
+    }
+
+    /// <summary>
+    /// 开始重连过程
+    /// </summary>
+    private void StartReconnectProcess()
+    {
+        if (m_ReconnectCoroutine != null)
+        {
+            StopCoroutine(m_ReconnectCoroutine);
+        }
+        
+        m_IsReconnecting = true;
+        m_ReconnectAttempts = 0;
+        m_ReconnectCoroutine = StartCoroutine(ReconnectCoroutine());
+    }
+
+    /// <summary>
+    /// 停止重连过程
+    /// </summary>
+    private void StopReconnectProcess()
+    {
+        if (m_ReconnectCoroutine != null)
+        {
+            StopCoroutine(m_ReconnectCoroutine);
+            m_ReconnectCoroutine = null;
+        }
+        
+        m_IsReconnecting = false;
+    }
+
+    /// <summary>
+    /// 重连协程
+    /// </summary>
+    private IEnumerator ReconnectCoroutine()
+    {
+        while (true)
+        {
+            // 检查最大重连次数
+            if (m_MaxReconnectAttempts > 0 && m_ReconnectAttempts >= m_MaxReconnectAttempts)
+            {
+                Debug.Log($"Maximum reconnect attempts ({m_MaxReconnectAttempts}) reached, stopping reconnect process");
+                UpdateConnectionStatusUI($"重连失败: 已达最大尝试次数 ({m_MaxReconnectAttempts})");
+                m_IsReconnecting = false;
+                yield break;
+            }
+
+            m_ReconnectAttempts++;
+            Debug.Log($"Attempting to reconnect (attempt {m_ReconnectAttempts})...");
+            UpdateConnectionStatusUI($"正在尝试重连 (第{m_ReconnectAttempts}次)...");
+
+            // 如果有之前连接的设备，尝试直接连接
+            if (m_ConnectedPeripheral != null)
+            {
+                
+                {
+                    Debug.Log($"Trying to reconnect to last device: {m_ConnectedPeripheral.name}");
+                    m_IsConnecting = true;
+                    m_Manager.ConnectToPeripheral(m_ConnectedPeripheral);
+                    
+                    // 等待一段时间看是否连接成功
+                    float waitTime = 0;
+                    while (waitTime < m_ReconnectInterval && m_IsConnecting)
+                    {
+                        yield return new WaitForSeconds(0.1f);
+                        waitTime += 0.1f;
+                    }
+                    
+                    // 如果连接成功，退出重连循环
+                    if (m_IsConnectedAndReady)
+                    {
+                        Debug.Log("Reconnection successful");
+                        m_IsReconnecting = false;
+                        m_ConnectionLost = false;
+                        yield break;
+                    }
+                }
+
+            }
+
+            // 如果直接连接失败，尝试重新扫描
+            
+            {
+                // 确保之前的扫描已停止
+                if (!m_IsScanStopped)
+                {
+                    m_Manager.StopScan();
+                    yield return new WaitForSeconds(0.5f);
+                }
+                
+                // 开始新的扫描
+                StartScan();
+                
+                // 等待扫描和连接过程
+                yield return new WaitForSeconds(m_ReconnectInterval);
+                
+                // 如果连接成功，退出重连循环
+                if (m_IsConnectedAndReady)
+                {
+                    Debug.Log("Reconnection successful after scan");
+                    m_IsReconnecting = false;
+                    m_ConnectionLost = false;
+                    yield break;
+                }
+            }
+            
+            // 等待下一次重连尝试
+            yield return new WaitForSeconds(0.5f);
         }
     }
 
@@ -365,7 +614,7 @@ public class BLESendJointV : MonoBehaviour
     {
         int counter = 0;
 
-        while (m_IsConnectedAndReady)
+        while (m_IsConnectedAndReady && !m_ConnectionLost)
         {
             try
             {
@@ -381,16 +630,20 @@ public class BLESendJointV : MonoBehaviour
                 else
                 {
                     Debug.LogWarning("BLE characteristic not available, waiting for next attempt");
+                    m_ConsecutiveFailures++;
                 }
             }
             catch (System.Exception e)
             {
                 // 捕获所有异常，确保协程不会因任何错误而中断
                 Debug.LogWarning($"Error occurred during transmission cycle, but continuing: {e.Message}");
+                m_ConsecutiveFailures++;
             }
 
             yield return new WaitForSeconds(m_SendInterval);
         }
+        
+        Debug.Log("Data transmission stopped due to connection loss or state change");
     }
 
     /// <summary>
@@ -445,19 +698,43 @@ public class BLESendJointV : MonoBehaviour
     }
 
     /// <summary>
-    /// 发送数据到ESP32
+    /// 发送数据到ESP32，添加了连接状态检查和错误处理
     /// </summary>
     private void SendDataToESP32(byte[] data)
     {
-        if (m_Characteristic == null || !m_IsConnectedAndReady)
+        if (m_Characteristic == null || !m_IsConnectedAndReady || m_ConnectionLost)
         {
             Debug.LogWarning("Characteristic not ready or connection lost");
+            m_ConsecutiveFailures++;
+            
+            // 如果连续失败次数超过阈值，触发重连
+            if (m_ConsecutiveFailures >= m_FailureThreshold && !m_ConnectionLost)
+            {
+                m_ConnectionLost = true;
+                m_IsConnectedAndReady = false;
+                
+                if (m_AutoReconnect && !m_IsReconnecting)
+                {
+                    Debug.Log($"Connection appears to be lost after {m_ConsecutiveFailures} consecutive failures");
+                    UpdateConnectionStatusUI("连接已断开，正在尝试重连...");
+                    StartReconnectProcess();
+                }
+                else
+                {
+                    UpdateConnectionStatusUI("连接已断开");
+                }
+            }
+            
             return;
         }
 
         try
         {
             m_Characteristic.Write(data);
+            
+            // 重置连续失败计数并更新最后成功发送时间
+            m_ConsecutiveFailures = 0;
+            m_LastSuccessfulSend = System.DateTime.Now;
 
             if (m_ShowDebugInfo)
             {
@@ -475,8 +752,27 @@ public class BLESendJointV : MonoBehaviour
         }
         catch (System.Exception e)
         {
-            // 只记录错误但不抛出异常，确保不影响主进程
-            Debug.LogWarning($"Failed to send data, but continuing: {e.Message}");
+            // 记录错误并增加连续失败计数
+            Debug.LogWarning($"Failed to send data: {e.Message}");
+            m_ConsecutiveFailures++;
+            
+            // 如果连续失败次数超过阈值，触发重连
+            if (m_ConsecutiveFailures >= m_FailureThreshold && !m_ConnectionLost)
+            {
+                m_ConnectionLost = true;
+                m_IsConnectedAndReady = false;
+                
+                if (m_AutoReconnect && !m_IsReconnecting)
+                {
+                    Debug.Log($"Connection appears to be lost after {m_ConsecutiveFailures} consecutive failures");
+                    UpdateConnectionStatusUI("连接已断开，正在尝试重连...");
+                    StartReconnectProcess();
+                }
+                else
+                {
+                    UpdateConnectionStatusUI("连接已断开");
+                }
+            }
         }
     }
 
@@ -512,7 +808,7 @@ public class BLESendJointV : MonoBehaviour
     {
         try
         {
-            if (m_IsConnectedAndReady && m_Characteristic != null && m_IsScanStopped)
+            if (m_IsConnectedAndReady && m_Characteristic != null && m_IsScanStopped && !m_ConnectionLost)
             {
                 UpdateFingerVelocityAndSpeed(); // 更新当前速度
                 byte[] data = GenerateData(0);
@@ -524,6 +820,10 @@ public class BLESendJointV : MonoBehaviour
                 {
                     Debug.LogWarning("Scan not stopped yet, cannot send data");
                 }
+                else if (m_ConnectionLost)
+                {
+                    Debug.LogWarning("Connection lost, cannot send data");
+                }
                 else
                 {
                     Debug.LogWarning("BLE not connected or characteristic not ready");
@@ -534,6 +834,7 @@ public class BLESendJointV : MonoBehaviour
         {
             // 捕获任何异常，确保不影响调用方
             Debug.LogWarning($"Error occurred while sending single data, but continuing: {e.Message}");
+            m_ConsecutiveFailures++;
         }
     }
 
@@ -567,6 +868,42 @@ public class BLESendJointV : MonoBehaviour
             {
                 // 防止UI更新异常影响主流程
                 Debug.LogWarning($"Error occurred while updating velocity UI: {e.Message}");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// 更新连接状态UI
+    /// </summary>
+    private void UpdateConnectionStatusUI(string status)
+    {
+        if (m_ConnectionStatusText != null)
+        {
+            try
+            {
+                m_ConnectionStatusText.text = status;
+                
+                // 根据状态设置颜色
+                if (status.Contains("已连接并就绪"))
+                {
+                    m_ConnectionStatusText.color = Color.green;
+                }
+                else if (status.Contains("正在连接") || status.Contains("正在扫描") || status.Contains("正在尝试重连"))
+                {
+                    m_ConnectionStatusText.color = Color.yellow;
+                }
+                else if (status.Contains("连接断开") || status.Contains("失败") || status.Contains("错误"))
+                {
+                    m_ConnectionStatusText.color = Color.red;
+                }
+                else
+                {
+                    m_ConnectionStatusText.color = Color.white;
+                }
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"Error updating connection status UI: {e.Message}");
             }
         }
     }
@@ -682,7 +1019,7 @@ public class BLESendJointV : MonoBehaviour
         }
 
         // 如果正在发送数据，可以考虑立即发送一次最新速度的数据
-        if (m_DataSendCoroutine != null && m_IsConnectedAndReady && m_Characteristic != null)
+        if (m_DataSendCoroutine != null && m_IsConnectedAndReady && m_Characteristic != null && !m_ConnectionLost)
         {
             try
             {
@@ -692,6 +1029,7 @@ public class BLESendJointV : MonoBehaviour
             catch (System.Exception e)
             {
                 Debug.LogWarning($"Error occurred while sending data after multiplier change: {e.Message}");
+                m_ConsecutiveFailures++;
             }
         }
     }
@@ -852,7 +1190,7 @@ public class BLESendJointV : MonoBehaviour
             StopDataTransmission();
             Debug.Log("Data transmission stopped");
         }
-        else if (m_IsConnectedAndReady && m_IsScanStopped)
+        else if (m_IsConnectedAndReady && m_IsScanStopped && !m_ConnectionLost)
         {
             StartDataTransmission();
             Debug.Log("Data transmission started");
@@ -861,5 +1199,90 @@ public class BLESendJointV : MonoBehaviour
         {
             Debug.LogWarning("Scan not stopped yet, cannot send data");
         }
+        else if (m_ConnectionLost)
+        {
+            Debug.LogWarning("Connection lost, cannot start transmission");
+            
+            // 如果连接已断开但未在重连，可以尝试重连
+            if (m_AutoReconnect && !m_IsReconnecting)
+            {
+                Debug.Log("Attempting to reconnect before starting transmission");
+                StartReconnectProcess();
+            }
+        }
+    }
+    
+    /// <summary>
+    /// 手动触发重连（可以通过UI按钮调用）
+    /// </summary>
+    public void ManualReconnect()
+    {
+        if (m_IsConnectedAndReady && !m_ConnectionLost)
+        {
+            Debug.Log("Already connected, no need to reconnect");
+            return;
+        }
+        
+        if (m_IsReconnecting)
+        {
+            StopReconnectProcess();
+        }
+        
+        // 重置连接状态
+        m_IsConnectedAndReady = false;
+        m_ConnectionLost = true;
+        
+        // 开始重连
+        UpdateConnectionStatusUI("手动触发重连...");
+        StartReconnectProcess();
+    }
+
+    /// <summary>
+    /// 设置自动重连
+    /// </summary>
+    public void SetAutoReconnect(bool enable)
+    {
+        m_AutoReconnect = enable;
+        Debug.Log($"Auto reconnect {(enable ? "enabled" : "disabled")}");
+    }
+
+    /// <summary>
+    /// 获取连接状态信息
+    /// </summary>
+    public string GetConnectionStatus()
+    {
+        if (m_IsConnectedAndReady && !m_ConnectionLost)
+        {
+            return $"已连接: {(m_ConnectedPeripheral != null ? m_ConnectedPeripheral.name : "Unknown")}";
+        }
+        else if (m_IsReconnecting)
+        {
+            return $"正在尝试重连 (第{m_ReconnectAttempts}次)...";
+        }
+        else if (m_IsConnecting)
+        {
+            return "正在连接...";
+        }
+        else if (!m_IsScanStopped)
+        {
+            return "正在扫描设备...";
+        }
+        else if (m_ConnectionLost)
+        {
+            return "连接已断开";
+        }
+        else
+        {
+            return "未连接";
+        }
+    }
+    
+    /// <summary>
+    /// 设置连续失败阈值
+    /// </summary>
+    public void SetFailureThreshold(int threshold)
+    {
+        m_FailureThreshold = Mathf.Max(1, threshold);
+        Debug.Log($"Failure threshold set to: {m_FailureThreshold}");
     }
 }

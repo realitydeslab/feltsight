@@ -22,6 +22,10 @@ public class EnterpriseCameraAccessManager : MonoBehaviour
     private Texture2D _texture;
     private RenderTexture _renderTexture;
     private IntPtr _texturePtr;
+    // private int _width = 1920;
+    // private int _height = 1080;
+    
+
     private int _width = 1920;
     private int _height = 1080;
 #endif

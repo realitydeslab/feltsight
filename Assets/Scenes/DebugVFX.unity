@@ -1153,6 +1153,7 @@ GameObject:
   m_Component:
   - component: {fileID: 242179459}
   - component: {fileID: 242179458}
+  - component: {fileID: 242179460}
   m_Layer: 5
   m_Name: EnterpriseCameraAccessManager
   m_TagString: Untagged
@@ -1174,6 +1175,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   PreviewMaterial: {fileID: 2100000, guid: e0890a3a5de34451f9f34f462cb8356e, type: 2}
   WebCamDeviceName: 
+  _texture: {fileID: 0}
 --- !u!4 &242179459
 Transform:
   m_ObjectHideFlags: 0
@@ -1189,6 +1191,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &242179460
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 242179457}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bec12a9e3229646b2bb500663a11013e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &253842652
 GameObject:
   m_ObjectHideFlags: 0
@@ -12951,7 +12965,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5478966273464709994, guid: 15a9b237705404ff6ba6c6defced5a84, type: 3}
       propertyPath: receiveInfoLogs
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5478966273464709994, guid: 15a9b237705404ff6ba6c6defced5a84, type: 3}
       propertyPath: receiveWarningLogs

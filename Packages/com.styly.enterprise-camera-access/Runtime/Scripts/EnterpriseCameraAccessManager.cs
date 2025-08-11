@@ -26,6 +26,21 @@ public class EnterpriseCameraAccessManager : MonoBehaviour
     private int _height = 1080;
 #endif
 
+    /// <summary>
+    /// Public property to access the current camera texture
+    /// </summary>
+    public Texture2D CurrentTexture 
+    { 
+        get 
+        { 
+#if UNITY_VISIONOS && !UNITY_EDITOR
+            return _texture;
+#else
+            return tmpTexture;
+#endif
+        } 
+    }
+
 
     /// <summary>
     /// Get Vision Pro main camera image as texture2D.
@@ -241,7 +256,7 @@ public class EnterpriseCameraAccessManager : MonoBehaviour
         Vector2 offset = new Vector2(0, 1);
         
         Graphics.Blit(_texture, _renderTexture, scale, offset);
-        Unity.PolySpatial.PolySpatialObjectUtils.MarkDirty(_renderTexture);
+        // Unity.PolySpatial.PolySpatialObjectUtils.MarkDirty(_renderTexture);
     }
 #endif
 

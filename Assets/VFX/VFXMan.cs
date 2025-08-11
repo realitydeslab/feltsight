@@ -13,51 +13,47 @@ using Random = UnityEngine.Random;
 public class VFXMan : MonoBehaviour
 {
     private Dictionary<MeshFilter, VisualEffect> vfxMap = new Dictionary<MeshFilter, VisualEffect>();
-    public GameObject vfxMeshPrefab; 
-    
-    [Header("AR Mesh Settings")]
-    public ARMeshManager meshManager;
-    
+    public GameObject vfxMeshPrefab;
+
+    [Header("AR Mesh Settings")] public ARMeshManager meshManager;
+
     [SerializeField, Tooltip("用于确定合并范围的相机")]
     private Camera viewCamera;
-    
+
     [SerializeField, Tooltip("更新合并mesh的间隔(秒)")]
     private float mergeUpdateInterval = 0.5f;
 
-    [Header("Hand Data")] 
-    # if UNITY_EDITOR
-    bool isUseRealHandData =  false;
-    #endif
-    #if !UNITY_EDITOR && UNITY_VISIONOS
+    [Header("Hand Data")]
+# if UNITY_EDITOR
+    bool isUseRealHandData = false;
+#endif
+#if !UNITY_EDITOR && UNITY_VISIONOS
     bool isUseRealHandData = true ;
-    #endif
-    
-    
+#endif
+
+
     [SerializeField] private MyHand hand;
     [SerializeField] private HandRaycaster handRaycaster;
     public float ballRadius;
-    
-    [Header("Ballline Shader Settings")]
-    [SerializeField, Tooltip("线条宽度")]
+
+    [Header("Ballline Shader Settings")] [SerializeField, Tooltip("线条宽度")]
     private float lineWidth = 1.0f;
-    [SerializeField, Tooltip("自发光强度")]
-    private float emissionIntensity = 1.0f;
-    [SerializeField, Tooltip("距离偏移量")]
-    private float distanceOffset = 0f;
-    
-    [Header("Debug UI")]
-    [SerializeField] private Text TextShowHandsBall;
+
+    [SerializeField, Tooltip("自发光强度")] private float emissionIntensity = 1.0f;
+    [SerializeField, Tooltip("距离偏移量")] private float distanceOffset = 0f;
+
+    [Header("Debug UI")] [SerializeField] private Text TextShowHandsBall;
     [SerializeField] private GameObject TransparentBallPrefab;
 
     // Shader属性ID缓存（性能优化）
     private static readonly int TargetDistanceID = Shader.PropertyToID("_TargetDistance");
     private static readonly int LineWidthID = Shader.PropertyToID("_LineWidth");
     private static readonly int EmissionIntensityID = Shader.PropertyToID("_EmissionIntensity");
-    
+
     private Matrix4x4 lastTransformMatrix;
     private float nextMergeUpdateTime;
     private MeshFilter combinedMeshFilter;
-    
+
     void Start()
     {
         if (viewCamera == null)
@@ -68,7 +64,7 @@ public class VFXMan : MonoBehaviour
                 Debug.LogWarning("找不到相机，请手动指定viewCamera");
             }
         }
-        
+
         if (meshManager == null)
         {
             meshManager = FindFirstObjectByType<ARMeshManager>();
@@ -77,15 +73,15 @@ public class VFXMan : MonoBehaviour
                 Debug.LogError("找不到ARMeshManager，请手动指定");
             }
         }
-        
-        #if UNITY_VISIONOS && !UNITY_EDITOR
+
+#if UNITY_VISIONOS && !UNITY_EDITOR
             meshManager.subsystem.SetClassificationEnabled(true);
-        #endif
-        
+#endif
+
         // 初始更新
         CreateVFX4Mesh();
     }
-    
+
     void Update()
     {
         // 检查是否需要更新合并的mesh
@@ -95,7 +91,7 @@ public class VFXMan : MonoBehaviour
             CreateVFX4Mesh(); // 这里会调用GetNearbyMeshes()，从而更新材质属性
         }
     }
-    
+
     /// <summary>
     /// 更新单个mesh的材质属性
     /// </summary>
@@ -104,37 +100,37 @@ public class VFXMan : MonoBehaviour
         // 获取mesh的Renderer组件
         Renderer meshRenderer = meshFilter.GetComponent<Renderer>();
         if (meshRenderer == null) return;
-        
+
         // 直接使用ballRadius + offset作为目标距离
         float targetDistance = ballRadius + distanceOffset;
-        
+
         // 使用MaterialPropertyBlock更新属性
         MaterialPropertyBlock propertyBlock = new MaterialPropertyBlock();
         meshRenderer.GetPropertyBlock(propertyBlock);
-        
+
         propertyBlock.SetFloat(TargetDistanceID, targetDistance);
         propertyBlock.SetFloat(LineWidthID, lineWidth);
         propertyBlock.SetFloat(EmissionIntensityID, emissionIntensity);
-        
+
         meshRenderer.SetPropertyBlock(propertyBlock);
     }
-    
+
     /// <summary>
     /// 更新所有mesh材质的Target Distance（独立调用方法）
     /// </summary>
     private void UpdateAllMeshMaterialsTargetDistance()
     {
         if (meshManager == null) return;
-        
+
         foreach (var meshFilter in meshManager.meshes)
         {
             if (meshFilter == null || meshFilter.mesh == null)
                 continue;
-                
+
             UpdateMeshMaterialProperties(meshFilter);
         }
     }
-    
+
     /// <summary>
     /// 公共方法：手动设置ballRadius
     /// </summary>
@@ -142,7 +138,7 @@ public class VFXMan : MonoBehaviour
     {
         ballRadius = newRadius;
     }
-    
+
     /// <summary>
     /// 公共方法：设置线条宽度
     /// </summary>
@@ -150,7 +146,7 @@ public class VFXMan : MonoBehaviour
     {
         lineWidth = width;
     }
-    
+
     /// <summary>
     /// 公共方法：设置自发光强度
     /// </summary>
@@ -158,7 +154,7 @@ public class VFXMan : MonoBehaviour
     {
         emissionIntensity = intensity;
     }
-    
+
     /// <summary>
     /// 将十六进制颜色字符串转换为Unity Color
     /// </summary>
@@ -168,21 +164,21 @@ public class VFXMan : MonoBehaviour
     {
         // 移除#号
         hex = hex.Replace("#", "");
-        
+
         // 处理3位十六进制颜色 (例如: "F0A" -> "FF00AA")
         if (hex.Length == 3)
         {
-            hex = hex[0].ToString() + hex[0].ToString() + 
-                  hex[1].ToString() + hex[1].ToString() + 
+            hex = hex[0].ToString() + hex[0].ToString() +
+                  hex[1].ToString() + hex[1].ToString() +
                   hex[2].ToString() + hex[2].ToString();
         }
-        
+
         // 处理6位十六进制颜色
         if (hex.Length == 6)
         {
             hex += "FF"; // 添加Alpha通道
         }
-        
+
         // 解析RGBA
         if (hex.Length == 8)
         {
@@ -190,18 +186,18 @@ public class VFXMan : MonoBehaviour
             byte g = System.Convert.ToByte(hex.Substring(2, 2), 16);
             byte b = System.Convert.ToByte(hex.Substring(4, 2), 16);
             byte a = System.Convert.ToByte(hex.Substring(6, 2), 16);
-            
+
             return new Color(r / 255f, g / 255f, b / 255f, a / 255f);
         }
-        
+
         Debug.LogError($"Invalid hex color format: {hex}");
         return Color.white;
     }
-    
+
     private Color[] getRandomColors()
     {
         Color[] colorset = new Color[4];
-        
+
         switch (Random.Range(0, 6))
         {
             case 0:
@@ -241,36 +237,37 @@ public class VFXMan : MonoBehaviour
                 colorset[3] = HexToColor("753FFF");
                 break;
         }
-        
+
         return colorset;
     }
-    
+
     private void CreateVFX4Mesh()
     {
         if (meshManager == null || viewCamera == null)
         {
             return;
         }
-        
+
         // 获取相机周围的mesh（同时更新材质属性）
         List<MeshFilter> nearbyMeshes = GetNearbyMeshes();
-        
+
         if (nearbyMeshes.Count == 0)
         {
             Debug.Log("No nearby meshes found");
             return;
         }
-        
+
         // 1) 销毁不再需要的 VFX
         foreach (var kv in vfxMap.ToList())
         {
             if (!nearbyMeshes.Contains(kv.Key))
             {
-                Destroy(kv.Value.gameObject);
+                // 安全地销毁VFX
+                DestroyVFXSafely(kv.Value);
                 vfxMap.Remove(kv.Key);
             }
         }
-        
+
         // 2) 为新 Mesh 创建 VFX
         foreach (var mf in nearbyMeshes)
         {
@@ -286,7 +283,7 @@ public class VFXMan : MonoBehaviour
             vfxInst.SetMesh("PointCloudMesh", mf.mesh);
             vfxInst.SetVector3("PointCloudTransform", mf.transform.localPosition);
             vfxInst.SetVector3("PointCloudRotation", mf.transform.localEulerAngles);
-            
+
 
             if (isUseRealHandData)
             {
@@ -311,39 +308,39 @@ public class VFXMan : MonoBehaviour
             }
             else
             {
-                    ballRadius = 2.0f;
-                
+                ballRadius = 2.0f;
+
             }
 
             foreach (var hitinfo in handRaycaster.lastHits)
             {
                 int vfxIndexInside = 0;
-                var handName= hitinfo.Key.Split("_")[0];
-                var fingerName= hitinfo.Key.Split("_")[1];
-                
+                var handName = hitinfo.Key.Split("_")[0];
+                var fingerName = hitinfo.Key.Split("_")[1];
+
                 vfxIndexInside += handName == "Left" ? 0 : 5;
                 vfxIndexInside += HandRaycaster.FingerName2index(fingerName);
-                vfxInst.SetVector3($"finger {vfxIndexInside+1}", hitinfo.Value.point);
-                vfxInst.SetVector3($"fingerNormal {vfxIndexInside+1}", hitinfo.Value.normal);
+                vfxInst.SetVector3($"finger {vfxIndexInside + 1}", hitinfo.Value.point);
+                vfxInst.SetVector3($"fingerNormal {vfxIndexInside + 1}", hitinfo.Value.normal);
             }
         }
     }
-    
+
     private List<MeshFilter> GetNearbyMeshes()
     {
         List<MeshFilter> nearbyMeshes = new List<MeshFilter>();
-        
+
         foreach (var meshFilter in meshManager.meshes)
         {
             if (meshFilter == null || meshFilter.mesh == null)
                 continue;
-            
+
             // 更新当前mesh的材质属性
             UpdateMeshMaterialProperties(meshFilter);
-            
+
             nearbyMeshes.Add(meshFilter);
         }
-        
+
         return nearbyMeshes;
     }
 
@@ -352,10 +349,56 @@ public class VFXMan : MonoBehaviour
     {
         CreateVFX4Mesh();
     }
-    
+
     [ContextMenu("手动更新材质距离")]
     public void ForceUpdateMaterialDistance()
     {
         UpdateAllMeshMaterialsTargetDistance();
+    }
+
+    private void OnDisable()
+    {
+        CleanupAllVFX();
+    }
+
+    private void OnDestroy()
+    {
+        CleanupAllVFX();
+    }
+
+    /// <summary>
+    /// 安全地销毁单个VFX实例
+    /// </summary>
+    private void DestroyVFXSafely(VisualEffect vfx)
+    {
+        if (vfx != null)
+        {
+            // 停止VFX并禁用组件
+            vfx.Stop();
+            vfx.enabled = false;
+
+            // 在运行时使用Destroy，在编辑器中使用DestroyImmediate
+            if (Application.isPlaying)
+            {
+                Destroy(vfx.gameObject);
+            }
+            else
+            {
+                DestroyImmediate(vfx.gameObject);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 清理所有VFX实例
+    /// </summary>
+    private void CleanupAllVFX()
+    {
+        foreach (var kv in vfxMap.ToList())
+        {
+            DestroyVFXSafely(kv.Value);
+        }
+
+        vfxMap.Clear();
     }
 }

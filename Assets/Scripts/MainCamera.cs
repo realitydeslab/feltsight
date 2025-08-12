@@ -1,30 +1,32 @@
-using System.Transactions;
 using UnityEngine;
-using Sentry;
-using Sentry.Unity;
+using UnityEngine.UI;
+using System.Collections;
 
 public class MainCamera : MonoBehaviour
 {
-    public Texture2D _texture;
+    public Texture2D _texture; // 当前使用的纹理
     EnterpriseCameraAccessManager ecam;
     
+    private int height;
+    private int width;
     
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    [Tooltip("RawImage component which will be used to draw resuls.")]
+    [SerializeField]
+    protected RawImage ImageUI;
+
+    void OnEnable()
     {
-        ecam = this.GetComponent<EnterpriseCameraAccessManager>();
+        
+        // height = firstInput.shape[5];
+        // width = firstInput.shape[6];
+        Debug.Log($"Model input size: {width}x{height}");
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        if (ecam.CurrentTexture != null)
-        {
-            _texture = ecam.CurrentTexture;
-            // 输出纹理分辨率信息
-            string logMessage = $"VisionOS Camera Texture Resolution: {_texture.width}x{_texture.height}"; // 1920x1080
-            Debug.Log(logMessage);
-            // SentrySdk.CaptureMessage(logMessage);
-        }
-    }
+    [Header("Performance Settings")]
+    [SerializeField] private float segmentationInterval = 0.5f; // 每0.5秒执行一次分割
+    [SerializeField] private bool enableAsync = true; // 启用异步处理
+    
+    private bool isProcessing = false;
+    private Coroutine segmentationCoroutine;
+    
 }

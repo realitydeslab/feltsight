@@ -1,12 +1,24 @@
 using UnityEngine;
-using Sentry;
-using Sentry.Unity; // On the top of the script
+using Sentry.Unity;
+
 
 public class SuperAdmin : MonoBehaviour
 {
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
+    public bool isEnableBLE=true;
+
+    public BLESendJointV Ble;
+    
+    
     void Start()
     {
+        if (!Ble)
+        {
+            Debug.LogError("BLE component is not assigned in SuperAdmin script!");
+        }
+        else
+        {
+            Ble.enabled = isEnableBLE;
+        }
 #if UNITY_VISIONOS && !UNITY_EDITOR
         
         SentrySdk.CaptureMessage("Felsight Start on VP");

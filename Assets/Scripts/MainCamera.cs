@@ -20,23 +20,19 @@ public class MainCamera : MonoBehaviour
     [Tooltip("Drag the classes.txt here")]
     public TextAsset classesAsset;
     
-    [Tooltip("Drag a YOLO model .onnx file here")]
-    public ModelAsset modelAsset;
-    
     [Tooltip("Select the task type: Detection or Segmentation")]
     public TaskType taskType = TaskType.Detection;
     
-    [Tooltip("Intersection over union threshold used for non-maximum suppression")]
-    [SerializeField, Range(0, 1)]
-    float iouThreshold = 0.5f;
-
-    [Tooltip("Confidence score threshold used for non-maximum suppression")]
-    [SerializeField, Range(0, 1)]
-    float scoreThreshold = 0.5f;
+    [Header("⚠️ 配置已迁移")]
+    [Tooltip("YOLO模型配置(ModelAsset、输入尺寸、IOU/Score阈值、推理间隔)现在统一在SuperAdmin.cs中设置")]
+    public string configNote = "👉 请到 SuperAdmin.cs 的 'YOLO模型配置' 区域设置模型参数";
     
-    [Tooltip("Time interval between YOLO inferences (seconds)")]
-    [SerializeField]
-    private float inferenceInterval = 0.1f;
+    // YOLO配置将从SuperAdmin获取
+    private ModelAsset modelAsset;
+    private float iouThreshold;
+    private float scoreThreshold;
+    private float inferenceInterval;
+    private bool enableYoloDebugLogs;
     
     [Tooltip("Drag a border box texture here")]
     public Texture2D borderTexture;
@@ -64,9 +60,9 @@ public class MainCamera : MonoBehaviour
     private bool isInferenceRunning = false;
     private Coroutine inferenceCoroutine;
     
-    // 模型输入尺寸
-    public int imageWidth;
-    public int imageHeight;
+    // 模型输入尺寸 (从SuperAdmin获取)
+    private int imageWidth;
+    private int imageHeight;
     
     // 当前推理结果存储
     private List<ClassificationResult> currentResults = new List<ClassificationResult>();
@@ -104,6 +100,9 @@ public class MainCamera : MonoBehaviour
     {
         Application.targetFrameRate = 60;
         
+        // 从SuperAdmin获取配置
+        LoadConfigFromSuperAdmin();
+        
         // 初始化EnterpriseCameraAccessManager
         ecam = FindFirstObjectByType<EnterpriseCameraAccessManager>();
         if (ecam == null)
@@ -135,6 +134,36 @@ public class MainCamera : MonoBehaviour
         
         // 启动相机处理协程
         StartCameraProcessing();
+    }
+    
+    /// <summary>
+    /// 从SuperAdmin加载YOLO配置
+    /// </summary>
+    private void LoadConfigFromSuperAdmin()
+    {
+        if (SuperAdmin.superAdmin != null)
+        {
+            modelAsset = SuperAdmin.superAdmin.yoloModelAsset;
+            imageWidth = SuperAdmin.superAdmin.modelInputWidth;
+            imageHeight = SuperAdmin.superAdmin.modelInputHeight;
+            iouThreshold = SuperAdmin.superAdmin.iouThreshold;
+            scoreThreshold = SuperAdmin.superAdmin.scoreThreshold;
+            inferenceInterval = SuperAdmin.superAdmin.inferenceInterval;
+            enableYoloDebugLogs = SuperAdmin.superAdmin.enableYoloDebugLogs;
+            
+            Debug.Log($"MainCamera: Loaded config from SuperAdmin - Model: {modelAsset?.name}, Size: {imageWidth}x{imageHeight}, IOU: {iouThreshold}, Score: {scoreThreshold}, Interval: {inferenceInterval}, DebugLogs: {enableYoloDebugLogs}");
+        }
+        else
+        {
+            Debug.LogWarning("MainCamera: SuperAdmin not found! Using default values.");
+            // 使用默认值
+            imageWidth = imageWidth == 0 ? 640 : imageWidth;
+            imageHeight = imageHeight == 0 ? 640 : imageHeight;
+            iouThreshold = 0.5f;
+            scoreThreshold = 0.5f;
+            inferenceInterval = 0.1f;
+            enableYoloDebugLogs = false;
+        }
     }
     
     void OnEnable()
@@ -372,7 +401,10 @@ public class MainCamera : MonoBehaviour
         }
         
         int boxesFound = coords.shape[0];
-        Debug.Log($"YOLO Detection found {boxesFound} objects");
+        if (enableYoloDebugLogs)
+        {
+            Debug.Log($"YOLO Detection found {boxesFound} objects");
+        }
         
         // 批处理更新结果以避免一帧内处理过多数据
         yield return StartCoroutine(UpdateResultsInBatches(coords, labelIDs, scores));
@@ -424,6 +456,14 @@ public class MainCamera : MonoBehaviour
     
     IEnumerator DrawDetectionBoxesAsync()
     {
+        // 检查是否应该显示YOLO结果
+        if (SuperAdmin.superAdmin != null && !SuperAdmin.superAdmin.isShowYoloResult)
+        {
+            // 不显示结果，清理旧的框并直接返回
+            ClearAnnotations();
+            yield break;
+        }
+        
         if (displayLocation == null || currentResults == null)
             yield break;
             
@@ -577,7 +617,10 @@ public class MainCamera : MonoBehaviour
         }
         
         int instancesFound = coords.shape[0];
-        Debug.Log($"YOLO Segmentation found {instancesFound} instances");
+        if (enableYoloDebugLogs)
+        {
+            Debug.Log($"YOLO Segmentation found {instancesFound} instances");
+        }
         
         // 批处理更新结果以避免一帧内处理过多数据
         yield return StartCoroutine(UpdateResultsInBatches(coords, labelIDs, scores));
@@ -599,7 +642,10 @@ public class MainCamera : MonoBehaviour
             y*= imageHeight;
             foreach (var result in currentResults)
             {
-                Debug.Log($"Checking pixel ({x}, {y}) against box: Center({result.CenterX}, {result.CenterY}), Size({result.Width}x{result.Height}), Label: {result.Label}");
+                if (enableYoloDebugLogs)
+                {
+                    Debug.Log($"Checking pixel ({x}, {y}) against box: Center({result.CenterX}, {result.CenterY}), Size({result.Width}x{result.Height}), Label: {result.Label}");
+                }
                 // 检查点是否在边界框内
                 float left = result.CenterX - result.Width / 2;
                 float right = result.CenterX + result.Width / 2;

@@ -119,6 +119,85 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &9680473
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 9680474}
+  - component: {fileID: 9680476}
+  - component: {fileID: 9680475}
+  m_Layer: 5
+  m_Name: YoloReslutImg
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &9680474
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9680473}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 5423332253655786682}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 51}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &9680475
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9680473}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Material: {fileID: 0}
+  m_Color: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_FontData:
+    m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+    m_FontSize: 45
+    m_FontStyle: 0
+    m_BestFit: 0
+    m_MinSize: 0
+    m_MaxSize: 80
+    m_Alignment: 4
+    m_AlignByGeometry: 0
+    m_RichText: 1
+    m_HorizontalOverflow: 1
+    m_VerticalOverflow: 1
+    m_LineSpacing: 1
+  m_Text: Yolo Result Visualize
+--- !u!222 &9680476
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9680473}
+  m_CullTransparentMesh: 1
 --- !u!1 &13266114
 GameObject:
   m_ObjectHideFlags: 0
@@ -1425,7 +1504,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0.842, y: 0.401, z: -0.339}
-  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
+  m_LocalScale: {x: 0.05, y: 0.05, z: 0.05}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 1648657921}
@@ -1507,12 +1586,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 242179457}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.759, y: 0.49399996, z: 1.983}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0.89475, y: -0.49377006, z: -1.0755}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 2101802427}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &242179460
 MonoBehaviour:
@@ -1521,7 +1600,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 242179457}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: bec12a9e3229646b2bb500663a11013e, type: 3}
   m_Name: 
@@ -1529,16 +1608,12 @@ MonoBehaviour:
   _texture: {fileID: 0}
   ImageUI: {fileID: 501591312}
   classesAsset: {fileID: 4900000, guid: 704da5cdad6544a5b82fbf9b2eeb8359, type: 3}
-  modelAsset: {fileID: 5022602860645237092, guid: 5bbdff637ac9e49ddb6fcfde6ee5b101, type: 3}
   taskType: 0
-  iouThreshold: 0.4
-  scoreThreshold: 0.4
-  inferenceInterval: 0.8
+  configNote: "\U0001F449 \u8BF7\u5230 SuperAdmin.cs \u7684 'YOLO\u6A21\u578B\u914D\u7F6E'
+    \u533A\u57DF\u8BBE\u7F6E\u6A21\u578B\u53C2\u6570"
   borderTexture: {fileID: 2800000, guid: 9c8b74f4a01db4dc8b7ab47ca39fa5fe, type: 3}
   font: {fileID: 12800000, guid: e3265ab4bf004d28a9537516768c1c75, type: 3}
-  imageWidth: 864
-  imageHeight: 480
-  maxBoxesPerFrame: 5
+  maxBoxesPerFrame: 10
   maxResultsInMemory: 100
 --- !u!114 &242179462
 MonoBehaviour:
@@ -1547,7 +1622,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 242179457}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5d4d52b18e6b14342824e02c142c087f, type: 3}
   m_Name: 
@@ -1558,12 +1633,7 @@ MonoBehaviour:
   font: {fileID: 12800000, guid: e3265ab4bf004d28a9537516768c1c75, type: 3}
   sourceTexture: {fileID: 2800000, guid: 1f21e1e07f1e8469b826061eda697e97, type: 3}
   taskType: 0
-  modelAsset: {fileID: 5022602860645237092, guid: 5bbdff637ac9e49ddb6fcfde6ee5b101, type: 3}
-  imageWidth: 864
-  imageHeight: 480
-  iouThreshold: 0.4
-  scoreThreshold: 0.4
-  inferenceInterval: 0.3
+  modelConfigNote: "\U0001F449 YOLO\u6A21\u578B\u914D\u7F6E(ModelAsset\u3001\u8F93\u5165\u5C3A\u5BF8\u3001IOU/Score\u9608\u503C\u3001\u63A8\u7406\u95F4\u9694)\u73B0\u5728\u7EDF\u4E00\u5728SuperAdmin.cs\u4E2D\u8BBE\u7F6E"
 --- !u!1 &253842652
 GameObject:
   m_ObjectHideFlags: 0
@@ -2439,7 +2509,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   handRaycaster: {fileID: 385671792}
   mainCamera: {fileID: 534803156}
-  yoloMainCamera: {fileID: 0}
+  yoloMainCamera: {fileID: 242179460}
   originTransform: {fileID: 707954745}
   xAxisTransform: {fileID: 219978129}
   yAxisTransform: {fileID: 662246943}
@@ -14107,7 +14177,7 @@ GameObject:
   - component: {fileID: 501591313}
   - component: {fileID: 501591312}
   m_Layer: 5
-  m_Name: RawImage
+  m_Name: RawImageForRealtimeCamera
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -14485,7 +14555,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0.422, z: 0}
-  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
+  m_LocalScale: {x: 0.05, y: 0.05, z: 0.05}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 1648657921}
@@ -14918,7 +14988,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0.93869996, z: 0.059000015}
-  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
+  m_LocalScale: {x: 0.05, y: 0.05, z: 0.05}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 1648657921}
@@ -15210,7 +15280,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0.424, z: 0}
-  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
+  m_LocalScale: {x: 0.049999997, y: 0.049999997, z: 0.049999997}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 1648657921}
@@ -19187,7 +19257,7 @@ GameObject:
   - component: {fileID: 1441915301}
   - component: {fileID: 1441915300}
   m_Layer: 5
-  m_Name: PreviewQuad
+  m_Name: RealtimeCamera
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -19276,12 +19346,12 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1441915299}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.759, y: 1.994, z: 1.983}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0.89475, y: 1.0062299, z: -1.0755}
   m_LocalScale: {x: 1.6, y: 0.9, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 2101802427}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1461729646
 GameObject:
@@ -20276,7 +20346,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1648657921}
   m_Layer: 0
-  m_Name: GameObject
+  m_Name: OneFingerHitAligner
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -20290,16 +20360,16 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1648657920}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.104, y: 0.682, z: 1.383}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0.031749994, y: -0.39777005, z: -1.6755}
   m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
+  m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 707954745}
   - {fileID: 219978129}
   - {fileID: 662246943}
   - {fileID: 583023528}
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 2101802427}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1655764262
 GameObject:
@@ -23111,6 +23181,35 @@ MonoBehaviour:
   isEnableBLE: 0
   isEnableVFX: 1
   Ble: {fileID: 1461729647}
+  isShowCameraImage: 1
+  cameraRawImage: {fileID: 1441915299}
+  MainCam: {fileID: 242179460}
+  Yolo: {fileID: 242179462}
+  isShowYoloResult: 1
+  yoloResultImg: {fileID: 501591310}
+  isEnableHandDetection: 1
+  handFuncAll: {fileID: 2109955095}
+  isShowHandRayHitClass: 1
+  handRayHitClassTexts:
+  - {fileID: 1966882542}
+  - {fileID: 1308625864}
+  - {fileID: 150004900}
+  - {fileID: 329426180}
+  - {fileID: 1436402509}
+  - {fileID: 2054658106}
+  - {fileID: 1612671694}
+  - {fileID: 1368583535}
+  - {fileID: 2095722702}
+  - {fileID: 1932541896}
+  righthandShiZhiRayHitIndicator: {fileID: 1648657920}
+  yoloModelAsset: {fileID: 5022602860645237092, guid: 5bbdff637ac9e49ddb6fcfde6ee5b101, type: 3}
+  modelInputWidth: 864
+  modelInputHeight: 480
+  iouThreshold: 0.4
+  scoreThreshold: 0.4
+  inferenceInterval: 0.535
+  enableYoloDebugLogs: 0
+  currentPlatform: 0
 --- !u!1 &2013693469
 GameObject:
   m_ObjectHideFlags: 0
@@ -24203,7 +24302,10 @@ Transform:
   m_LocalPosition: {x: 0.13575, y: 0.98777, z: 3.0585}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 1441915303}
+  - {fileID: 242179459}
+  - {fileID: 1648657921}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2105344724
@@ -25376,6 +25478,9 @@ PrefabInstance:
       addedObject: {fileID: 1552764449}
     - targetCorrespondingSourceObject: {fileID: 4956617155759966971, guid: 49348039b7d774d86bcfcebecd60d375, type: 3}
       insertIndex: -1
+      addedObject: {fileID: 9680474}
+    - targetCorrespondingSourceObject: {fileID: 4956617155759966971, guid: 49348039b7d774d86bcfcebecd60d375, type: 3}
+      insertIndex: -1
       addedObject: {fileID: 501591311}
     - targetCorrespondingSourceObject: {fileID: 4956617155759966971, guid: 49348039b7d774d86bcfcebecd60d375, type: 3}
       insertIndex: -1
@@ -25886,8 +25991,5 @@ SceneRoots:
   - {fileID: 1939256160}
   - {fileID: 678674672}
   - {fileID: 83106668}
-  - {fileID: 1971586291}
-  - {fileID: 1441915303}
   - {fileID: 2101802427}
-  - {fileID: 242179459}
-  - {fileID: 1648657921}
+  - {fileID: 1971586291}

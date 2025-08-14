@@ -7,6 +7,7 @@ public class ScreenSpaceProjector : MonoBehaviour
     [Header("References")]
     [SerializeField] private HandRaycaster handRaycaster;
     [SerializeField] private Camera mainCamera;
+    [SerializeField] private MainCamera yoloMainCamera; // 添加对MainCamera的引用以获取YOLO检测结果
     
     [Header("Reference Transform Setup")]
     [SerializeField] private Transform originTransform;
@@ -32,6 +33,16 @@ public class ScreenSpaceProjector : MonoBehaviour
             return;
         }
         
+        // 自动查找场景中的MainCamera组件
+        if (yoloMainCamera == null)
+        {
+            yoloMainCamera = FindFirstObjectByType<MainCamera>();
+            if (yoloMainCamera == null)
+            {
+                Debug.LogError("ScreenSpaceProjector: No YOLO MainCamera found in scene!");
+            }
+        }
+        
         // Setup reference transforms if not assigned
         SetupReferenceTransforms();
         
@@ -53,10 +64,13 @@ public class ScreenSpaceProjector : MonoBehaviour
         {
             // Project 3D hit point to screen space (0-1 coordinates)
             Vector2 screenPoint = ProjectToScreenSpace(hit.point);
+            
+            // 获取指向的物体类别
+            string pointedObjectClass = GetPointedObjectClass(screenPoint);
              
             if (showDebugInfo)
             {
-                Debug.Log($"Hit point: {hit.point}, Screen space: {screenPoint}");
+                Debug.Log($"Hit point: {hit.point}, Screen space: {screenPoint}, Pointed Object Class: {pointedObjectClass ?? "None"}");
             }
             
             // Map 2D coordinates to reference transform space
@@ -74,6 +88,20 @@ public class ScreenSpaceProjector : MonoBehaviour
             }
         }
     }
+    
+    /// <summary>
+    /// 根据屏幕坐标获取指向的物体类别
+    /// </summary>
+    /// <param name="screenPoint">屏幕坐标 (0-1范围)</param>
+    /// <returns>物体类别名称，如果没有指向任何检测物体则返回null</returns>
+    private string GetPointedObjectClass(Vector2 screenPoint)
+    {
+        if (yoloMainCamera == null) return null;
+        
+        // 使用MainCamera的GetClassificationAtPixel方法获取类别
+        return yoloMainCamera.GetClassificationAtPixel(screenPoint);
+    }
+    
     /// <summary>
     /// Calculates screen-space position a world space object. Useful for showing something on screen that is not visible in VR.
     /// For example, it can be used to update the position of a marker that highlights the gaze of the player, using eye tracking.

@@ -595,20 +595,19 @@ public class MainCamera : MonoBehaviour
     {
         lock (resultsLock)
         {
-            // 将屏幕像素坐标转换为模型坐标系统
-            float normalizedX = x / imageWidth;
-            float normalizedY = y / imageHeight;
-            
+            x*= imageWidth;
+            y*= imageHeight;
             foreach (var result in currentResults)
             {
+                Debug.Log($"Checking pixel ({x}, {y}) against box: Center({result.CenterX}, {result.CenterY}), Size({result.Width}x{result.Height}), Label: {result.Label}");
                 // 检查点是否在边界框内
                 float left = result.CenterX - result.Width / 2;
                 float right = result.CenterX + result.Width / 2;
                 float top = result.CenterY - result.Height / 2;
                 float bottom = result.CenterY + result.Height / 2;
                 
-                if (normalizedX >= left && normalizedX <= right &&
-                    normalizedY >= top && normalizedY <= bottom)
+                if (x >= left && x <= right &&
+                    y >= top && y <= bottom)
                 {
                     return result.Label;
                 }

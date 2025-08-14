@@ -34,6 +34,22 @@ public class EnterpriseCameraAccessManager : MonoBehaviour
         get 
         { 
 #if UNITY_VISIONOS && !UNITY_EDITOR
+            if (_texture != null)
+            {
+                Vector2 scale = new Vector2(1, -1);
+                Vector2 offset = new Vector2(0, 1);
+                
+                Graphics.Blit(_texture, _renderTexture, scale, offset);
+                
+                // Create a new Texture2D from the RenderTexture
+                RenderTexture.active = _renderTexture;
+                Texture2D result = new Texture2D(_renderTexture.width, _renderTexture.height, TextureFormat.RGBA32, false);
+                result.ReadPixels(new Rect(0, 0, _renderTexture.width, _renderTexture.height), 0, 0);
+                result.Apply();
+                RenderTexture.active = null;
+                
+                return result;
+            }
             return _texture;
 #else
             return tmpTexture;

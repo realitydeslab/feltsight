@@ -358,6 +358,19 @@ public class VFXMan : MonoBehaviour
 
     private void OnDisable()
     {
+        // 在编辑器中确保正确清理VFX组件
+        if (!Application.isPlaying)
+        {
+            foreach (var kv in vfxMap.ToList())
+            {
+                if (kv.Value != null)
+                {
+                    kv.Value.Stop();
+                    kv.Value.enabled = false;
+                }
+            }
+        }
+        
         CleanupAllVFX();
     }
 

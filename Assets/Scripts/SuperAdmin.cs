@@ -1,16 +1,21 @@
+using System;
 using UnityEngine;
 using Sentry.Unity;
 
 
 public class SuperAdmin : MonoBehaviour
 {
+    [Header("设置区")]
     public bool isEnableBLE=true;
-
+    
+    [Header("Leave me alone")]
     public BLESendJointV Ble;
-    
-    
-    void Start()
+
+    private void Awake()
     {
+        #if UNITY_VISIONOS
+        isEnableBLE = true;
+        #endif
         if (!Ble)
         {
             Debug.LogError("BLE component is not assigned in SuperAdmin script!");
@@ -19,6 +24,11 @@ public class SuperAdmin : MonoBehaviour
         {
             Ble.enabled = isEnableBLE;
         }
+    }
+
+    void Start()
+    {
+
 #if UNITY_VISIONOS && !UNITY_EDITOR
         
         SentrySdk.CaptureMessage("Felsight Start on VP");

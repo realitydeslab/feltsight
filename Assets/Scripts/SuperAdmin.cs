@@ -36,6 +36,8 @@ public class SuperAdmin : MonoBehaviour
     public bool isShowHandRayHitClass = true;
     public GameObject[] handRayHitClassTexts;
     public GameObject righthandShiZhiRayHitIndicator;
+    [Tooltip("是否显示手指投影调试信息")]
+    public bool showDebugInfo = true;
     
     [Header("YOLO模型配置")]
     [Tooltip("YOLO模型文件(.onnx)")]

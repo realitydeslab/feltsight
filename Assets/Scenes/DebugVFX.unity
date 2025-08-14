@@ -2495,6 +2495,7 @@ MonoBehaviour:
   isShowHitInfo: 0
   showDebugRays: 1
   rayDuration: 0.1
+  colorSmoothSpeed: 5
 --- !u!114 &385671793
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2516,8 +2517,6 @@ MonoBehaviour:
   spherePrefab: {fileID: 583023524}
   sphereSize: 0.1
   sphereMaterial: {fileID: 2100000, guid: ab1e501408f784696a373918622592b2, type: 2}
-  showDebugInfo: 1
-  createMultipleSpheres: 0
   fingerClasses:
   - 
   - 
@@ -2540,7 +2539,6 @@ MonoBehaviour:
   - {fileID: 1368583536}
   - {fileID: 2095722704}
   - {fileID: 1932541898}
-  enableUIDisplay: 1
 --- !u!1 &390276096 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4524093123533786790, guid: 49348039b7d774d86bcfcebecd60d375, type: 3}
@@ -23202,6 +23200,7 @@ MonoBehaviour:
   - {fileID: 2095722702}
   - {fileID: 1932541896}
   righthandShiZhiRayHitIndicator: {fileID: 1648657920}
+  showDebugInfo: 0
   yoloModelAsset: {fileID: 5022602860645237092, guid: 5bbdff637ac9e49ddb6fcfde6ee5b101, type: 3}
   modelInputWidth: 864
   modelInputHeight: 480
@@ -24862,6 +24861,18 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 385671791}
     m_Modifications:
+    - target: {fileID: 2368181387154763815, guid: 0f96f23d49fd74cee9a1556ecdd108a8, type: 3}
+      propertyPath: m_PropertySheet.m_Vector3f.m_Array.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2368181387154763815, guid: 0f96f23d49fd74cee9a1556ecdd108a8, type: 3}
+      propertyPath: m_PropertySheet.m_Vector3f.m_Array.Array.data[0].m_Name
+      value: HitPosiiton
+      objectReference: {fileID: 0}
+    - target: {fileID: 2368181387154763815, guid: 0f96f23d49fd74cee9a1556ecdd108a8, type: 3}
+      propertyPath: m_PropertySheet.m_Vector3f.m_Array.Array.data[0].m_Overridden
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 2913284042192793045, guid: 0f96f23d49fd74cee9a1556ecdd108a8, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0

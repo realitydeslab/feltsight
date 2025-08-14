@@ -20,9 +20,6 @@ public class ScreenSpaceProjector : MonoBehaviour
     [SerializeField] private float sphereSize = 0.05f;
     [SerializeField] private Material sphereMaterial;
     
-    [Header("Debug Settings")]
-    [SerializeField] private bool showDebugInfo = true;
-    [SerializeField] private bool createMultipleSpheres = false; // If false, reuses single sphere
     
     private GameObject currentSphere;
     
@@ -31,8 +28,6 @@ public class ScreenSpaceProjector : MonoBehaviour
     
     [Header("UI Display")]
     [SerializeField] private TextMeshProUGUI[] fingerClassTexts = new TextMeshProUGUI[10]; // UI文本控件数组，对应10个手指
-    [SerializeField] private bool enableUIDisplay = true; // 是否启用UI显示
-    
     // 手指名称数组，用于显示
     private readonly string[] fingerNames = new string[]
     {
@@ -122,14 +117,15 @@ public class ScreenSpaceProjector : MonoBehaviour
             Vector3 mappedPosition = MapToReferenceTransformSpace(screenPoint);
             CreateOrUpdateSphere(mappedPosition);
             
-            if (showDebugInfo)
+            if (SuperAdmin.superAdmin != null && SuperAdmin.superAdmin.showDebugInfo)
             {
                 Debug.Log($"Right Index Hit: {hit.point}, Screen: {screenPoint}, Class: {GetFingerClass(6) ?? "None"}");
             }
         }
         else
         {
-            if (currentSphere != null && !createMultipleSpheres)
+            // Hide sphere if no hit (always reuse single sphere)
+            if (currentSphere != null)
             {
                 currentSphere.SetActive(false);
             }
@@ -141,7 +137,10 @@ public class ScreenSpaceProjector : MonoBehaviour
     /// </summary>
     private void UpdateFingerClassUI()
     {
-        if (!enableUIDisplay) return;
+        // 直接从SuperAdmin读取UI显示状态
+        if (SuperAdmin.superAdmin == null || 
+            !(SuperAdmin.superAdmin.isShowHandRayHitClass && SuperAdmin.superAdmin.isShowYoloResult)) 
+            return;
         
         for (int i = 0; i < 10; i++)
         {
@@ -232,11 +231,11 @@ public class ScreenSpaceProjector : MonoBehaviour
     }
     
     /// <summary>
-    /// Create or update the sphere at the specified position
+    /// Create or update the sphere at the specified position (always reuse single sphere)
     /// </summary>
     private void CreateOrUpdateSphere(Vector3 position)
     {
-        if (createMultipleSpheres || currentSphere == null)
+        if (currentSphere == null)
         {
             // Create new sphere
             GameObject newSphere = Instantiate(spherePrefab, position, Quaternion.identity);
@@ -251,15 +250,7 @@ public class ScreenSpaceProjector : MonoBehaviour
                 }
             }
             
-            if (!createMultipleSpheres)
-            {
-                // Destroy old sphere if reusing
-                if (currentSphere != null)
-                {
-                    DestroyImmediate(currentSphere);
-                }
-                currentSphere = newSphere;
-            }
+            currentSphere = newSphere;
         }
         else
         {
@@ -294,7 +285,7 @@ public class ScreenSpaceProjector : MonoBehaviour
     }
     
     /// <summary>
-    /// Clear all created spheres
+    /// Clear all created spheres (only single sphere since we always reuse)
     /// </summary>
     public void ClearSpheres()
     {
@@ -302,16 +293,6 @@ public class ScreenSpaceProjector : MonoBehaviour
         {
             DestroyImmediate(currentSphere);
             currentSphere = null;
-        }
-        
-        // If creating multiple spheres, find and destroy them
-        if (createMultipleSpheres)
-        {
-            GameObject[] spheres = GameObject.FindGameObjectsWithTag("ScreenProjectionSphere");
-            foreach (GameObject sphere in spheres)
-            {
-                DestroyImmediate(sphere);
-            }
         }
     }
     
@@ -409,12 +390,13 @@ public class ScreenSpaceProjector : MonoBehaviour
     }
     
     /// <summary>
-    /// 设置是否启用UI显示
+    /// 设置是否启用UI显示 (已弃用 - 现在由SuperAdmin统一控制)
     /// </summary>
     /// <param name="enable">是否启用UI显示</param>
+    [System.Obsolete("UI显示现在由SuperAdmin.cs中的 isShowHandRayHitClass && isShowYoloResult 控制")]
     public void SetUIDisplayEnabled(bool enable)
     {
-        enableUIDisplay = enable;
+        Debug.LogWarning("SetUIDisplayEnabled is obsolete. UI display is now controlled by SuperAdmin.isShowHandRayHitClass && SuperAdmin.isShowYoloResult");
     }
     
     /// <summary>

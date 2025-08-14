@@ -194,6 +194,17 @@ public class HandRaycaster : MonoBehaviour
     // OneEuro 滤波器容器
     private OneEuroFilter3DContainer filterContainer;
     
+    // 存储每个手指的当前颜色 (用于平滑过渡)
+    private Dictionary<string, Vector3> fingerColors = new Dictionary<string, Vector3>();
+    
+    // 颜色平滑插值速度
+    [Header("颜色平滑设置")]
+    [SerializeField] private float colorSmoothSpeed = 5.0f;
+    
+    // 预定义的HDR颜色
+    private readonly Vector3 redHdrColor = new Vector3(1.304119f, 0.08193418f, 0.2414862f);
+    private readonly Vector3 blueHdrColor = new Vector3(0.4905663f, 8f, 4.499153f);
+    
     // 手指关节ID定义
     private static readonly XRHandJointID[] TipJointIds = new[]
     {
@@ -304,6 +315,34 @@ public class HandRaycaster : MonoBehaviour
                     vfx[index].SetFloat("BallRaidus",vv.ballRadius);
                     vfx[index].SetBool("isHit",true);
                     
+                    // 检查是否指向了YOLO识别的物体类别
+                    ScreenSpaceProjector projector = FindFirstObjectByType<ScreenSpaceProjector>();
+                    
+                    // 目标颜色 - 默认为蓝色
+                    Vector3 targetColor = blueHdrColor;
+                    
+                    // 检查是否有YOLO分类
+                    if (projector != null)
+                    {
+                        int arrayIndex = handedness == Handedness.Left ? fingerIndex : fingerIndex + 5;
+                        string fingerClass = projector.GetFingerClass(arrayIndex);
+                        
+                        // 设置目标颜色 - 有类别时为红色，没有类别时为蓝色
+                        if (fingerClass != null)
+                        {
+                            // 指向了YOLO识别的物体，设置为红色调
+                            targetColor = redHdrColor;
+                        }
+                    }
+                    
+                    // 应用平滑过渡
+                    string colorKey = $"{handName}_{fingerName}_color";
+                    Vector3 smoothedColor = SmoothColor(colorKey, targetColor);
+                    
+                    // 设置VFX颜色
+                    vfx[index].SetVector3("HitColor", smoothedColor);
+                    
+                    
 
                     if (isShowHitInfo)
                     {
@@ -315,6 +354,10 @@ public class HandRaycaster : MonoBehaviour
                 {
                     lineRenderer.SetPosition(1, ray.origin+offset+rayDirection*vv.ballRadius);
                     vfx[index].SetBool("isHit",false);
+                    // 平滑过渡到蓝色
+                    string colorKey = $"{handName}_{fingerName}_color";
+                    Vector3 smoothedColor = SmoothColor(colorKey, blueHdrColor);
+                    vfx[index].SetVector3("HitColor", smoothedColor);
                     // 移除之前的命中记录
                     if (lastHits.ContainsKey(rayKey))
                     {
@@ -492,6 +535,34 @@ public class HandRaycaster : MonoBehaviour
     public void SetShowDebugRays(bool show)
     {
         showDebugRays = show;
+    }
+    
+    /// <summary>
+    /// 平滑过渡颜色，减少抖动
+    /// </summary>
+    /// <param name="key">手指唯一标识</param>
+    /// <param name="targetColor">目标颜色</param>
+    /// <returns>平滑过渡后的颜色</returns>
+    private Vector3 SmoothColor(string key, Vector3 targetColor)
+    {
+        if (!fingerColors.TryGetValue(key, out Vector3 currentColor))
+        {
+            // 如果是第一次设置颜色，直接使用目标颜色
+            fingerColors[key] = targetColor;
+            return targetColor;
+        }
+        
+        // 计算平滑过渡的颜色 (Vector3.Lerp)
+        Vector3 smoothedColor = Vector3.Lerp(
+            currentColor, 
+            targetColor, 
+            colorSmoothSpeed * Time.deltaTime
+        );
+        
+        // 更新存储的颜色
+        fingerColors[key] = smoothedColor;
+        
+        return smoothedColor;
     }
     
 }

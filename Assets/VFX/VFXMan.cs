@@ -402,6 +402,11 @@ public class VFXMan : MonoBehaviour
         {
             // 停止VFX并禁用组件
             vfx.Stop();
+            
+            // 重要：在销毁前重置所有VFX参数以清理内部状态
+            vfx.Reinit();
+            
+            // 禁用组件
             vfx.enabled = false;
 
             // 在运行时使用Destroy，在编辑器中使用DestroyImmediate

@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.XR;
 using UnityEngine.XR.Hands;
 
 public class ScreenSpaceProjector : MonoBehaviour
@@ -52,8 +53,7 @@ public class ScreenSpaceProjector : MonoBehaviour
         {
             // Project 3D hit point to screen space (0-1 coordinates)
             Vector2 screenPoint = ProjectToScreenSpace(hit.point);
-            screenPoint.x = (int)(screenPoint.x * (1.1f));
-            
+             
             if (showDebugInfo)
             {
                 Debug.Log($"Hit point: {hit.point}, Screen space: {screenPoint}");
@@ -74,6 +74,25 @@ public class ScreenSpaceProjector : MonoBehaviour
             }
         }
     }
+    /// <summary>
+    /// Calculates screen-space position a world space object. Useful for showing something on screen that is not visible in VR.
+    /// For example, it can be used to update the position of a marker that highlights the gaze of the player, using eye tracking.
+    /// </summary>
+    /// <param name="camera">The camera used for VR rendering.</param>
+    /// <param name="worldPos">World position of a point.</param>
+    /// <returns>Screen position of a point.</returns>
+    static Vector2 WorldToScreenVR(Camera camera, Vector3 worldPos)
+    {
+        Vector3 screenPoint = camera.WorldToViewportPoint(worldPos);
+        float w = XRSettings.eyeTextureWidth;
+        float h = XRSettings.eyeTextureHeight;
+        float ar = w / h;
+
+        screenPoint.x = (screenPoint.x - 0.15f * XRSettings.eyeTextureWidth) / 0.7f;
+        screenPoint.y = (screenPoint.y - 0.15f * XRSettings.eyeTextureHeight) / 0.7f;
+
+        return screenPoint;
+    }
     
     /// <summary>
     /// Project 3D world position to screen space coordinates (0-1)
@@ -93,24 +112,24 @@ public class ScreenSpaceProjector : MonoBehaviour
         return new Vector2(normalizedX, normalizedY);
     }
     
+
     /// <summary>
-    /// Map 2D screen coordinates to the reference transform coordinate system
+    /// Map 2D texture coordinates (in pixels) to the reference transform coordinate system
     /// </summary>
-    private Vector3 MapToReferenceTransformSpace(Vector2 screenCoords)
+    private Vector3 MapToReferenceTransformSpace(Vector2 textureCoords)
     {
         if (originTransform == null || xAxisTransform == null || yAxisTransform == null)
         {
             Debug.LogWarning("Reference transforms not properly set up!");
             return Vector3.zero;
         }
-        
         // Get the reference vectors
         Vector3 originPos = originTransform.position;
         Vector3 xAxisVector = xAxisTransform.position - originPos; // Vector from origin to x=1
         Vector3 yAxisVector = yAxisTransform.position - originPos; // Vector from origin to y=1
         
         // Map the 2D coordinates to 3D space using the reference transforms
-        Vector3 mappedPosition = originPos + (screenCoords.x * xAxisVector) + (screenCoords.y * yAxisVector);
+        Vector3 mappedPosition = originPos + (textureCoords.x * xAxisVector) + (textureCoords.y * yAxisVector);
         
         return mappedPosition;
     }

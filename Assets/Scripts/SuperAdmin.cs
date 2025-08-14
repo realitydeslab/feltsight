@@ -6,7 +6,9 @@ using Sentry.Unity;
 public class SuperAdmin : MonoBehaviour
 {
     [Header("设置区")]
+    public bool isDebug=true;
     public bool isEnableBLE=true;
+    public bool isEnableVFX=true;
     
     [Header("Leave me alone")]
     public BLESendJointV Ble;

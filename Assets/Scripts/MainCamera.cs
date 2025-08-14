@@ -56,6 +56,7 @@ public class MainCamera : MonoBehaviour
     private Worker worker;
     private string[] labels;
     private RenderTexture targetRT;
+    private RenderTexture tempRT; // Double buffering
     private Tensor<float> centersToCorners;
     
     // 推理状态控制
@@ -124,6 +125,7 @@ public class MainCamera : MonoBehaviour
         if (imageWidth > 0 && imageHeight > 0)
         {
             targetRT = new RenderTexture(imageWidth, imageHeight, 0);
+            tempRT = new RenderTexture(imageWidth, imageHeight, 0);
         }
         
         Debug.Log($"Model input size: {imageWidth}x{imageHeight}");
@@ -307,9 +309,12 @@ public class MainCamera : MonoBehaviour
         isInferenceRunning = true;
         lastInferenceTime = Time.time;
         
-        // 准备输入纹理
-        float aspect = (float)_texture.width / _texture.height;
-        Graphics.Blit(_texture, targetRT, new Vector2(1f / aspect, 1), new Vector2(0, 0));
+        // 准备输入纹理 - 先进行变换 (使用双缓冲)
+        Vector2 scale = new Vector2(1, -1);
+        Vector2 offset = new Vector2(0, 1);
+        Graphics.Blit(_texture, tempRT, scale, offset);
+        
+        Graphics.Blit(tempRT, targetRT);
         
         // 显示在UI上（可选）
         if (ImageUI != null)
@@ -673,6 +678,23 @@ public class MainCamera : MonoBehaviour
             finally
             {
                 targetRT = null;
+            }
+        }
+        
+        if (tempRT != null)
+        {
+            try
+            {
+                tempRT.Release();
+                Destroy(tempRT);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"Error releasing tempRT: {e.Message}");
+            }
+            finally
+            {
+                tempRT = null;
             }
         }
         

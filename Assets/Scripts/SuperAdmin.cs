@@ -13,7 +13,7 @@ public class SuperAdmin : MonoBehaviour
 
     private void Awake()
     {
-        #if UNITY_VISIONOS
+        #if UNITY_VISIONOS && !UNITY_EDITOR
         isEnableBLE = true;
         #endif
         if (!Ble)
@@ -23,6 +23,7 @@ public class SuperAdmin : MonoBehaviour
         else
         {
             Ble.enabled = isEnableBLE;
+            Debug.Log("BLE component is assigned and enabled: " + isEnableBLE);
         }
     }
 

@@ -52,6 +52,7 @@ public class MainCamera : MonoBehaviour
     
     // YOLO推理相关变量
     const BackendType backend = BackendType.GPUCompute;
+    // const BackendType backend = BackendType.CPU;
     private Worker worker;
     private string[] labels;
     private RenderTexture targetRT;
@@ -89,9 +90,12 @@ public class MainCamera : MonoBehaviour
     }
 
     [Header("Performance Settings")]
-
+    [Tooltip("Maximum number of boxes to process per frame")]
+    [SerializeField] private int maxBoxesPerFrame = 5;
     
-    private bool isProcessing = false;
+    [Tooltip("Maximum number of results to keep in memory")]
+    [SerializeField] private int maxResultsInMemory = 100;
+    
     private Coroutine segmentationCoroutine;
     private Coroutine cameraProcessingCoroutine;
     
@@ -100,7 +104,7 @@ public class MainCamera : MonoBehaviour
         Application.targetFrameRate = 60;
         
         // 初始化EnterpriseCameraAccessManager
-        ecam = FindObjectOfType<EnterpriseCameraAccessManager>();
+        ecam = FindFirstObjectByType<EnterpriseCameraAccessManager>();
         if (ecam == null)
         {
             Debug.LogError("EnterpriseCameraAccessManager not found in scene!");
@@ -303,43 +307,51 @@ public class MainCamera : MonoBehaviour
         isInferenceRunning = true;
         lastInferenceTime = Time.time;
         
+        // 准备输入纹理
+        float aspect = (float)_texture.width / _texture.height;
+        Graphics.Blit(_texture, targetRT, new Vector2(1f / aspect, 1), new Vector2(0, 0));
+        
+        // 显示在UI上（可选）
+        if (ImageUI != null)
+        {
+            ImageUI.texture = targetRT;
+        }
+        
+        yield return null; // 让渲染继续
+        
+        // 创建输入张量并调度推理 - 使用 using 保护
+        bool inferenceSuccess = false;
         try
         {
-            // 准备输入纹理
-            float aspect = (float)_texture.width / _texture.height;
-            Graphics.Blit(_texture, targetRT, new Vector2(1f / aspect, 1), new Vector2(0, 0));
-            
-            // 显示在UI上（可选）
-            if (ImageUI != null)
-            {
-                ImageUI.texture = targetRT;
-            }
-            
-            yield return null; // 让渲染继续
-            
-            // 创建输入张量并调度推理
             using (Tensor<float> inputTensor = new Tensor<float>(new TensorShape(1, 3, imageHeight, imageWidth)))
             {
                 TextureConverter.ToTensor(targetRT, inputTensor);
                 worker.Schedule(inputTensor);
-                
-                yield return null; // 等待一帧让工作线程处理
-                
-                // 处理结果
-                if (taskType == TaskType.Detection)
-                {
-                    yield return StartCoroutine(ProcessDetectionResultsAsync());
-                }
-                else
-                {
-                    yield return StartCoroutine(ProcessSegmentationResultsAsync());
-                }
+                inferenceSuccess = true;
             }
         }
-        finally
+        catch (System.Exception e)
         {
-            isInferenceRunning = false;
+            Debug.LogError($"Inference error: {e.Message}");
+            yield break;
         }
+        
+        if (inferenceSuccess)
+        {
+            yield return null; // 等待一帧让工作线程处理
+            
+            // 处理结果
+            if (taskType == TaskType.Detection)
+            {
+                yield return StartCoroutine(ProcessDetectionResultsAsync());
+            }
+            else
+            {
+                yield return StartCoroutine(ProcessSegmentationResultsAsync());
+            }
+        }
+        
+        isInferenceRunning = false;
     }
     
     IEnumerator ProcessDetectionResultsAsync()
@@ -357,12 +369,24 @@ public class MainCamera : MonoBehaviour
         int boxesFound = coords.shape[0];
         Debug.Log($"YOLO Detection found {boxesFound} objects");
         
-        // 更新结果
+        // 批处理更新结果以避免一帧内处理过多数据
+        yield return StartCoroutine(UpdateResultsInBatches(coords, labelIDs, scores));
+        
+        yield return null;
+    }
+    
+    IEnumerator UpdateResultsInBatches(Tensor<float> coords, Tensor<int> labelIDs, Tensor<float> scores)
+    {
+        int boxesFound = coords.shape[0];
+        int maxBoxesToProcess = Mathf.Min(boxesFound, maxResultsInMemory);
+        
         lock (resultsLock)
         {
             currentResults.Clear();
             
-            for (int n = 0; n < boxesFound && n < 200; n++)
+            int processedCount = 0;
+            
+            for (int n = 0; n < maxBoxesToProcess; n++)
             {
                 if (labelIDs[n] >= labels.Length) continue;
                 
@@ -378,25 +402,31 @@ public class MainCamera : MonoBehaviour
                 };
                 
                 currentResults.Add(result);
+                processedCount++;
+                
+                // 批处理：每处理一定数量后让出控制权
+                if (processedCount >= maxBoxesPerFrame)
+                {
+                    processedCount = 0;
+                    yield return null; // 让出一帧
+                }
             }
             
             // 绘制检测框
-            DrawDetectionBoxes();
+            StartCoroutine(DrawDetectionBoxesAsync());
         }
-        
-        yield return null;
     }
     
-    void DrawDetectionBoxes()
+    IEnumerator DrawDetectionBoxesAsync()
     {
         if (displayLocation == null || currentResults == null)
-            return;
+            yield break;
             
         // 清理旧的框
         ClearAnnotations();
         
         if (ImageUI == null)
-            return;
+            yield break;
             
         float displayWidth = ImageUI.rectTransform.rect.width;
         float displayHeight = ImageUI.rectTransform.rect.height;
@@ -404,9 +434,11 @@ public class MainCamera : MonoBehaviour
         float scaleX = displayWidth / imageWidth;
         float scaleY = displayHeight / imageHeight;
         
+        int processedCount = 0;
+        
         lock (resultsLock)
         {
-            for (int i = 0; i < currentResults.Count && i < 200; i++)
+            for (int i = 0; i < currentResults.Count; i++)
             {
                 var result = currentResults[i];
                 
@@ -421,6 +453,14 @@ public class MainCamera : MonoBehaviour
                 };
                 
                 DrawBox(box, i, displayHeight * 0.05f);
+                processedCount++;
+                
+                // 批处理绘制
+                if (processedCount >= maxBoxesPerFrame)
+                {
+                    processedCount = 0;
+                    yield return null;
+                }
             }
         }
     }
@@ -510,10 +550,12 @@ public class MainCamera : MonoBehaviour
     
     public void ClearAnnotations()
     {
-        foreach (var box in boxPool)
+        for (int i = 0; i < boxPool.Count; i++)
         {
-            if (box != null)
-                box.SetActive(false);
+            if (boxPool[i] != null)
+            {
+                boxPool[i].SetActive(false);
+            }
         }
     }
     
@@ -532,32 +574,8 @@ public class MainCamera : MonoBehaviour
         int instancesFound = coords.shape[0];
         Debug.Log($"YOLO Segmentation found {instancesFound} instances");
         
-        // 更新结果
-        lock (resultsLock)
-        {
-            currentResults.Clear();
-            
-            for (int n = 0; n < instancesFound && n < 200; n++)
-            {
-                if (labelIDs[n] >= labels.Length) continue;
-                
-                var result = new ClassificationResult
-                {
-                    CenterX = coords[n, 0],
-                    CenterY = coords[n, 1],
-                    Width = coords[n, 2],
-                    Height = coords[n, 3],
-                    Label = labels[labelIDs[n]],
-                    Confidence = scores[n],
-                    ClassID = labelIDs[n]
-                };
-                
-                currentResults.Add(result);
-            }
-            
-            // 绘制检测框
-            DrawDetectionBoxes();
-        }
+        // 批处理更新结果以避免一帧内处理过多数据
+        yield return StartCoroutine(UpdateResultsInBatches(coords, labelIDs, scores));
         
         yield return null;
     }
@@ -608,14 +626,90 @@ public class MainCamera : MonoBehaviour
     {
         StopCameraProcessing();
         
-        // 清理资源
-        centersToCorners?.Dispose();
-        worker?.Dispose();
+        // 停止所有协程
+        if (inferenceCoroutine != null)
+        {
+            StopCoroutine(inferenceCoroutine);
+            inferenceCoroutine = null;
+        }
         
+        if (segmentationCoroutine != null)
+        {
+            StopCoroutine(segmentationCoroutine);
+            segmentationCoroutine = null;
+        }
+        
+        // 清理 Tensor 资源
+        try 
+        {
+            centersToCorners?.Dispose();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"Error disposing centersToCorners: {e.Message}");
+        }
+        
+        try
+        {
+            worker?.Dispose();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"Error disposing worker: {e.Message}");
+        }
+        
+        // 清理 RenderTexture
         if (targetRT != null)
         {
-            targetRT.Release();
-            targetRT = null;
+            try
+            {
+                targetRT.Release();
+                Destroy(targetRT);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"Error releasing targetRT: {e.Message}");
+            }
+            finally
+            {
+                targetRT = null;
+            }
+        }
+        
+        // 清理 UI 对象池
+        try
+        {
+            foreach (var box in boxPool)
+            {
+                if (box != null)
+                {
+                    Destroy(box);
+                }
+            }
+            boxPool.Clear();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"Error clearing box pool: {e.Message}");
+        }
+        
+        // 清理结果列表
+        lock (resultsLock)
+        {
+            currentResults?.Clear();
+        }
+    }
+    
+    // 添加OnApplicationPause方法处理应用暂停/恢复
+    void OnApplicationPause(bool pauseStatus)
+    {
+        if (pauseStatus)
+        {
+            StopCameraProcessing();
+        }
+        else if(enabled)
+        {
+            StartCameraProcessing();
         }
     }
 }

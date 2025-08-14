@@ -54,6 +54,13 @@ public class VFXMan : MonoBehaviour
     private float nextMergeUpdateTime;
     private MeshFilter combinedMeshFilter;
 
+    void Awake()
+    {
+        // 确保字典已初始化
+        if (vfxMap == null)
+            vfxMap = new Dictionary<MeshFilter, VisualEffect>();
+    }
+
     void Start()
     {
         if (viewCamera == null)
@@ -354,6 +361,13 @@ public class VFXMan : MonoBehaviour
     public void ForceUpdateMaterialDistance()
     {
         UpdateAllMeshMaterialsTargetDistance();
+    }
+
+    private void OnEnable()
+    {
+        // 确保在启用时vfxMap已初始化
+        if (vfxMap == null)
+            vfxMap = new Dictionary<MeshFilter, VisualEffect>();
     }
 
     private void OnDisable()

@@ -24,6 +24,8 @@ public class EnterpriseCameraAccessManager : MonoBehaviour
     private IntPtr _texturePtr;
     private int _width = 1920;
     private int _height = 1080;
+    // 添加用于缓存的Texture2D，避免每次都创建新的
+    private Texture2D _cachedResultTexture = null;
 #endif
 
     /// <summary>
@@ -41,14 +43,21 @@ public class EnterpriseCameraAccessManager : MonoBehaviour
                 
                 Graphics.Blit(_texture, _renderTexture, scale, offset);
                 
-                // Create a new Texture2D from the RenderTexture
+                // 重用Texture2D对象而不是每次都创建新的
+                if (_cachedResultTexture == null || _cachedResultTexture.width != _renderTexture.width || _cachedResultTexture.height != _renderTexture.height)
+                {
+                    if (_cachedResultTexture != null)
+                        Destroy(_cachedResultTexture);
+                    _cachedResultTexture = new Texture2D(_renderTexture.width, _renderTexture.height, TextureFormat.RGBA32, false);
+                }
+                
+                // 从RenderTexture读取像素到已存在的Texture2D
                 RenderTexture.active = _renderTexture;
-                Texture2D result = new Texture2D(_renderTexture.width, _renderTexture.height, TextureFormat.RGBA32, false);
-                result.ReadPixels(new Rect(0, 0, _renderTexture.width, _renderTexture.height), 0, 0);
-                result.Apply();
+                _cachedResultTexture.ReadPixels(new Rect(0, 0, _renderTexture.width, _renderTexture.height), 0, 0);
+                _cachedResultTexture.Apply();
                 RenderTexture.active = null;
                 
-                return result;
+                return _cachedResultTexture;
             }
             return _texture;
 #else
@@ -113,6 +122,38 @@ public class EnterpriseCameraAccessManager : MonoBehaviour
         return;
 #endif
         if (webCamTexture != null) { webCamTexture.Stop(); }
+    }
+
+    // 添加OnDestroy方法来清理资源
+    void OnDestroy()
+    {
+#if UNITY_VISIONOS && !UNITY_EDITOR
+        if (_cachedResultTexture != null)
+        {
+            Destroy(_cachedResultTexture);
+            _cachedResultTexture = null;
+        }
+        
+        if (_renderTexture != null)
+        {
+            _renderTexture.Release();
+            Destroy(_renderTexture);
+            _renderTexture = null;
+        }
+        
+        if (_texture != null)
+        {
+            Destroy(_texture);
+            _texture = null;
+        }
+#endif
+        
+        if (webCamTexture != null) 
+        {
+            webCamTexture.Stop();
+            Destroy(webCamTexture);
+            webCamTexture = null;
+        }
     }
 
     IEnumerator RequestCameraPermission_iOS()

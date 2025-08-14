@@ -166,7 +166,7 @@ public class BLESendJointV : MonoBehaviour
         InitializeBLE();
         
         // 更新连接状态UI
-        UpdateConnectionStatusUI("初始化中...");
+        UpdateConnectionStatusUI("Initializing...");
     }
 
     void Update()
@@ -221,7 +221,7 @@ public class BLESendJointV : MonoBehaviour
             m_Manager.OnUpdateState((string state) =>
             {
                 Debug.Log("BLE state: " + state);
-                UpdateConnectionStatusUI("BLE状态: " + state);
+                UpdateConnectionStatusUI("BLE Status: " + state);
                 
                 if (state != "poweredOn") return;
                 
@@ -257,7 +257,7 @@ public class BLESendJointV : MonoBehaviour
                 m_IsConnecting = true;
                 
                 Debug.Log("Scan stopped, preparing to connect to device: " + peripheral.name);
-                UpdateConnectionStatusUI("正在连接到: " + peripheral.name);
+                UpdateConnectionStatusUI("Connecting to: " + peripheral.name);
                 
                 m_Manager.ConnectToPeripheral(peripheral);
             });
@@ -272,7 +272,7 @@ public class BLESendJointV : MonoBehaviour
                 m_ConnectionLost = false;
                 
                 Debug.Log("Connected to device: " + peripheral.name);
-                UpdateConnectionStatusUI("已连接: " + peripheral.name);
+                UpdateConnectionStatusUI("Connected: " + peripheral.name);
                 
                 peripheral.discoverServices();
             });
@@ -296,7 +296,7 @@ public class BLESendJointV : MonoBehaviour
                 {
                     m_Characteristic = characteristic;
                     Debug.Log("RX characteristic found, ready to send data");
-                    UpdateConnectionStatusUI("已连接并就绪");
+                    UpdateConnectionStatusUI("Connected and Ready");
 
                     // 确保扫描已停止后才设置连接就绪状态
                     m_IsConnectedAndReady = true;
@@ -327,12 +327,12 @@ public class BLESendJointV : MonoBehaviour
         {
             // 记录初始化错误但允许程序继续运行
             Debug.LogError($"BLE initialization failed, but main process continues: {e.Message}");
-            UpdateConnectionStatusUI("BLE初始化失败: " + e.Message);
+            UpdateConnectionStatusUI("BLE Init Failed: " + e.Message);
         }
     }
 
     /// <summary>
-    /// 检查连接状态，如果长时间没有成功发送数据，认为连接已断开
+    /// 检查连接状态，如果长时间没有成功发送数据，认为Connection Lost
     /// </summary>
     private void CheckConnectionStatus()
     {
@@ -343,7 +343,7 @@ public class BLESendJointV : MonoBehaviour
         // 检查距离上次成功发送数据的时间
         double secondsSinceLastSuccess = (System.DateTime.Now - m_LastSuccessfulSend).TotalSeconds;
         
-        // 如果超过发送间隔的5倍，且连续失败次数超过阈值，认为连接已断开
+        // 如果超过发送间隔的5倍，且连续失败次数超过阈值，认为Connection Lost
         if (secondsSinceLastSuccess > m_SendInterval * 5 && m_ConsecutiveFailures >= m_FailureThreshold)
         {
             Debug.Log($"Connection appears to be lost: {m_ConsecutiveFailures} consecutive failures, " +
@@ -355,12 +355,12 @@ public class BLESendJointV : MonoBehaviour
             // 如果启用了自动重连，开始重连过程
             if (m_AutoReconnect)
             {
-                UpdateConnectionStatusUI("连接已断开，正在尝试重连...");
+                UpdateConnectionStatusUI("Connection Lost, Reconnecting...");
                 StartReconnectProcess();
             }
             else
             {
-                UpdateConnectionStatusUI("连接已断开");
+                UpdateConnectionStatusUI("Connection Lost");
             }
         }
     }
@@ -376,13 +376,13 @@ public class BLESendJointV : MonoBehaviour
         {
             m_IsScanStopped = false;
             Debug.Log("Starting BLE scan...");
-            UpdateConnectionStatusUI("正在扫描设备...");
+            UpdateConnectionStatusUI("Scanning Devices...");
             m_Manager.StartScan();
         }
         catch (System.Exception e)
         {
             Debug.LogError($"Failed to start scan: {e.Message}");
-            UpdateConnectionStatusUI("扫描失败: " + e.Message);
+            UpdateConnectionStatusUI("Scan Failed: " + e.Message);
         }
     }
 
@@ -426,14 +426,14 @@ public class BLESendJointV : MonoBehaviour
             if (m_MaxReconnectAttempts > 0 && m_ReconnectAttempts >= m_MaxReconnectAttempts)
             {
                 Debug.Log($"Maximum reconnect attempts ({m_MaxReconnectAttempts}) reached, stopping reconnect process");
-                UpdateConnectionStatusUI($"重连失败: 已达最大尝试次数 ({m_MaxReconnectAttempts})");
+                UpdateConnectionStatusUI($"Reconnect Failed: Max attempts reached ({m_MaxReconnectAttempts})");
                 m_IsReconnecting = false;
                 yield break;
             }
 
             m_ReconnectAttempts++;
             Debug.Log($"Attempting to reconnect (attempt {m_ReconnectAttempts})...");
-            UpdateConnectionStatusUI($"正在尝试重连 (第{m_ReconnectAttempts}次)...");
+            UpdateConnectionStatusUI($"Reconnecting (Attempt {m_ReconnectAttempts})...");
 
             // 如果有之前连接的设备，尝试直接连接
             if (m_ConnectedPeripheral != null)
@@ -716,12 +716,12 @@ public class BLESendJointV : MonoBehaviour
                 if (m_AutoReconnect && !m_IsReconnecting)
                 {
                     Debug.Log($"Connection appears to be lost after {m_ConsecutiveFailures} consecutive failures");
-                    UpdateConnectionStatusUI("连接已断开，正在尝试重连...");
+                    UpdateConnectionStatusUI("Connection Lost, Reconnecting...");
                     StartReconnectProcess();
                 }
                 else
                 {
-                    UpdateConnectionStatusUI("连接已断开");
+                    UpdateConnectionStatusUI("Connection Lost");
                 }
             }
             
@@ -765,12 +765,12 @@ public class BLESendJointV : MonoBehaviour
                 if (m_AutoReconnect && !m_IsReconnecting)
                 {
                     Debug.Log($"Connection appears to be lost after {m_ConsecutiveFailures} consecutive failures");
-                    UpdateConnectionStatusUI("连接已断开，正在尝试重连...");
+                    UpdateConnectionStatusUI("Connection Lost, Reconnecting...");
                     StartReconnectProcess();
                 }
                 else
                 {
-                    UpdateConnectionStatusUI("连接已断开");
+                    UpdateConnectionStatusUI("Connection Lost");
                 }
             }
         }
@@ -884,7 +884,7 @@ public class BLESendJointV : MonoBehaviour
                 m_ConnectionStatusText.text = status;
                 
                 // 根据状态设置颜色
-                if (status.Contains("已连接并就绪"))
+                if (status.Contains("Connected and Ready"))
                 {
                     m_ConnectionStatusText.color = Color.green;
                 }
@@ -1203,7 +1203,7 @@ public class BLESendJointV : MonoBehaviour
         {
             Debug.LogWarning("Connection lost, cannot start transmission");
             
-            // 如果连接已断开但未在重连，可以尝试重连
+            // 如果Connection Lost但未在重连，可以尝试重连
             if (m_AutoReconnect && !m_IsReconnecting)
             {
                 Debug.Log("Attempting to reconnect before starting transmission");
@@ -1233,7 +1233,7 @@ public class BLESendJointV : MonoBehaviour
         m_ConnectionLost = true;
         
         // 开始重连
-        UpdateConnectionStatusUI("手动触发重连...");
+        UpdateConnectionStatusUI("Manual Reconnect Triggered...");
         StartReconnectProcess();
     }
 
@@ -1253,27 +1253,27 @@ public class BLESendJointV : MonoBehaviour
     {
         if (m_IsConnectedAndReady && !m_ConnectionLost)
         {
-            return $"已连接: {(m_ConnectedPeripheral != null ? m_ConnectedPeripheral.name : "Unknown")}";
+            return $"Connected: {(m_ConnectedPeripheral != null ? m_ConnectedPeripheral.name : "Unknown")}";
         }
         else if (m_IsReconnecting)
         {
-            return $"正在尝试重连 (第{m_ReconnectAttempts}次)...";
+            return $"Reconnecting (Attempt {m_ReconnectAttempts})...";
         }
         else if (m_IsConnecting)
         {
-            return "正在连接...";
+            return "Connecting...";
         }
         else if (!m_IsScanStopped)
         {
-            return "正在扫描设备...";
+            return "Scanning Devices...";
         }
         else if (m_ConnectionLost)
         {
-            return "连接已断开";
+            return "Connection Lost";
         }
         else
         {
-            return "未连接";
+            return "Not Connected";
         }
     }
     

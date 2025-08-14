@@ -300,7 +300,7 @@ public class HandRaycaster : MonoBehaviour
 
                     // Debug.Log("Send to Hit VFX: "+hit.point);
                     vfx[index].SetVector3("HitPosiiton",hit.point+offset );
-                    vfx[index].SetVector3("HitNormal",hit.point+hit.normal);
+                    vfx[index].SetVector3("HitNormal",hit.normal);
                     vfx[index].SetFloat("BallRaidus",vv.ballRadius);
                     vfx[index].SetBool("isHit",true);
                     

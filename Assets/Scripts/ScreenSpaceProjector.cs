@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.XR;
 using UnityEngine.XR.Hands;
+using TMPro;
 
 public class ScreenSpaceProjector : MonoBehaviour
 {
@@ -24,6 +25,20 @@ public class ScreenSpaceProjector : MonoBehaviour
     [SerializeField] private bool createMultipleSpheres = false; // If false, reuses single sphere
     
     private GameObject currentSphere;
+    
+    [Header("Finger Classification")]
+    [SerializeField] public string[] fingerClasses = new string[10]; // 存储10个手指的类别信息 [左手拇指到小指, 右手拇指到小指]
+    
+    [Header("UI Display")]
+    [SerializeField] private TextMeshProUGUI[] fingerClassTexts = new TextMeshProUGUI[10]; // UI文本控件数组，对应10个手指
+    [SerializeField] private bool enableUIDisplay = true; // 是否启用UI显示
+    
+    // 手指名称数组，用于显示
+    private readonly string[] fingerNames = new string[]
+    {
+        "L-Thumb", "L-Index", "L-Middle", "L-Ring", "L-Pinky",
+        "R-Thumb", "R-Index", "R-Middle", "R-Ring", "R-Pinky"
+    };
     
     void Start()
     {
@@ -50,41 +65,95 @@ public class ScreenSpaceProjector : MonoBehaviour
     
     void Update()
     {
-        ProcessRightIndexFingerHit();
+        ProcessAllFingerClasses();
     }
     
     /// <summary>
-    /// Process the right hand index finger raycast hit and create sphere at projected position
+    /// 处理所有手指的类别检测，更新fingerClasses数组
+    /// fingerClasses数组索引: 0-4左手(拇指到小指), 5-9右手(拇指到小指)
     /// </summary>
-    private void ProcessRightIndexFingerHit()
+    private void ProcessAllFingerClasses()
     {
-        // Debug.Log(handRaycaster.TryGetFingerHit(Handedness.Right, 1, out RaycastHit hi11t));
-        // Get right hand index finger hit
+        // 处理左手 (索引0-4)
+        for (int fingerIndex = 0; fingerIndex < 5; fingerIndex++)
+        {
+            if (handRaycaster.TryGetFingerHit(Handedness.Left, fingerIndex, out RaycastHit hit))
+            {
+                Vector2 screenPoint = ProjectToScreenSpace(hit.point);
+                string classification = GetPointedObjectClass(screenPoint);
+                fingerClasses[fingerIndex] = classification;
+            }
+            else
+            {
+                fingerClasses[fingerIndex] = null;
+            }
+        }
+        
+        // 处理右手 (索引5-9)
+        for (int fingerIndex = 0; fingerIndex < 5; fingerIndex++)
+        {
+            if (handRaycaster.TryGetFingerHit(Handedness.Right, fingerIndex, out RaycastHit hit))
+            {
+                Vector2 screenPoint = ProjectToScreenSpace(hit.point);
+                string classification = GetPointedObjectClass(screenPoint);
+                fingerClasses[fingerIndex + 5] = classification;
+            }
+            else
+            {
+                fingerClasses[fingerIndex + 5] = null;
+            }
+        }
+        
+        // 为右手食指创建可视化球体 (保持原有功能)
+        ProcessRightIndexFingerVisualization();
+        
+        // 更新UI显示
+        UpdateFingerClassUI();
+    }
+    
+    /// <summary>
+    /// 为右手食指创建可视化球体 (从原ProcessRightIndexFingerHit方法分离出来)
+    /// </summary>
+    private void ProcessRightIndexFingerVisualization()
+    {
         if (handRaycaster.TryGetFingerHit(Handedness.Right, 1, out RaycastHit hit)) // Index finger = 1
         {
-            // Project 3D hit point to screen space (0-1 coordinates)
             Vector2 screenPoint = ProjectToScreenSpace(hit.point);
+            Vector3 mappedPosition = MapToReferenceTransformSpace(screenPoint);
+            CreateOrUpdateSphere(mappedPosition);
             
-            // 获取指向的物体类别
-            string pointedObjectClass = GetPointedObjectClass(screenPoint);
-             
             if (showDebugInfo)
             {
-                Debug.Log($"Hit point: {hit.point}, Screen space: {screenPoint}, Pointed Object Class: {pointedObjectClass ?? "None"}");
+                Debug.Log($"Right Index Hit: {hit.point}, Screen: {screenPoint}, Class: {GetFingerClass(6) ?? "None"}");
             }
-            
-            // Map 2D coordinates to reference transform space
-            Vector3 mappedPosition = MapToReferenceTransformSpace(screenPoint);
-            
-            // Create or update sphere at the mapped position
-            CreateOrUpdateSphere(mappedPosition);
         }
         else
         {
-            // Hide sphere if no hit
             if (currentSphere != null && !createMultipleSpheres)
             {
                 currentSphere.SetActive(false);
+            }
+        }
+    }
+    
+    /// <summary>
+    /// 更新所有手指类别信息到UI文本控件
+    /// </summary>
+    private void UpdateFingerClassUI()
+    {
+        if (!enableUIDisplay) return;
+        
+        for (int i = 0; i < 10; i++)
+        {
+            if (fingerClassTexts[i] != null)
+            {
+                string fingerName = fingerNames[i];
+                string classification = fingerClasses[i];
+                string displayText = classification != null ? 
+                    $"{fingerName}: {classification}" : 
+                    $"{fingerName}: --";
+                    
+                fingerClassTexts[i].text = displayText;
             }
         }
     }
@@ -244,6 +313,116 @@ public class ScreenSpaceProjector : MonoBehaviour
                 DestroyImmediate(sphere);
             }
         }
+    }
+    
+    // ========== 公共API方法 ==========
+    
+    /// <summary>
+    /// 根据手指索引获取对应的类别信息
+    /// </summary>
+    /// <param name="fingerIndex">手指索引 (0-4: 左手拇指到小指, 5-9: 右手拇指到小指)</param>
+    /// <returns>物体类别名称，如果索引无效或没有指向任何物体则返回null</returns>
+    public string GetFingerClass(int fingerIndex)
+    {
+        if (fingerIndex < 0 || fingerIndex >= 10)
+        {
+            Debug.LogWarning($"ScreenSpaceProjector: Invalid finger index {fingerIndex}. Valid range is 0-9.");
+            return null;
+        }
+        
+        return fingerClasses[fingerIndex];
+    }
+    
+    /// <summary>
+    /// 获取所有手指的类别信息
+    /// </summary>
+    /// <returns>包含10个手指类别信息的数组副本</returns>
+    public string[] GetAllFingerClasses()
+    {
+        string[] result = new string[10];
+        System.Array.Copy(fingerClasses, result, 10);
+        return result;
+    }
+    
+    /// <summary>
+    /// 获取左手所有手指的类别信息
+    /// </summary>
+    /// <returns>包含5个左手手指类别信息的数组 (拇指到小指)</returns>
+    public string[] GetLeftHandClasses()
+    {
+        string[] result = new string[5];
+        System.Array.Copy(fingerClasses, 0, result, 0, 5);
+        return result;
+    }
+    
+    /// <summary>
+    /// 获取右手所有手指的类别信息
+    /// </summary>
+    /// <returns>包含5个右手手指类别信息的数组 (拇指到小指)</returns>
+    public string[] GetRightHandClasses()
+    {
+        string[] result = new string[5];
+        System.Array.Copy(fingerClasses, 5, result, 0, 5);
+        return result;
+    }
+    
+    /// <summary>
+    /// 获取指定手的指定手指类别信息
+    /// </summary>
+    /// <param name="handedness">手的类型 (Left/Right)</param>
+    /// <param name="fingerIndex">手指索引 (0: 拇指, 1: 食指, 2: 中指, 3: 无名指, 4: 小指)</param>
+    /// <returns>物体类别名称，如果索引无效或没有指向任何物体则返回null</returns>
+    public string GetFingerClass(Handedness handedness, int fingerIndex)
+    {
+        if (fingerIndex < 0 || fingerIndex >= 5)
+        {
+            Debug.LogWarning($"ScreenSpaceProjector: Invalid finger index {fingerIndex} for hand. Valid range is 0-4.");
+            return null;
+        }
+        
+        int arrayIndex = handedness == Handedness.Left ? fingerIndex : fingerIndex + 5;
+        return GetFingerClass(arrayIndex);
+    }
+    
+    // ========== UI管理方法 ==========
+    
+    /// <summary>
+    /// 设置UI文本控件数组
+    /// </summary>
+    /// <param name="textComponents">TextMeshProUGUI控件数组，必须包含10个元素，对应10个手指</param>
+    public void SetFingerClassTextComponents(TextMeshProUGUI[] textComponents)
+    {
+        if (textComponents == null)
+        {
+            Debug.LogWarning("ScreenSpaceProjector: Text components array is null.");
+            return;
+        }
+        
+        if (textComponents.Length != 10)
+        {
+            Debug.LogWarning($"ScreenSpaceProjector: Text components array must contain exactly 10 elements, got {textComponents.Length}.");
+            return;
+        }
+        
+        fingerClassTexts = textComponents;
+        Debug.Log("ScreenSpaceProjector: Finger class text components updated successfully.");
+    }
+    
+    /// <summary>
+    /// 设置是否启用UI显示
+    /// </summary>
+    /// <param name="enable">是否启用UI显示</param>
+    public void SetUIDisplayEnabled(bool enable)
+    {
+        enableUIDisplay = enable;
+    }
+    
+    /// <summary>
+    /// 手动强制更新UI显示（通常由Update自动调用）
+    /// </summary>
+    public void ForceUpdateUI()
+    {
+        UpdateFingerClassUI();
     }
     
     void OnDrawGizmos()

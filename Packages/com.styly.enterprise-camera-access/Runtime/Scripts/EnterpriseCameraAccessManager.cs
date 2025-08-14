@@ -36,29 +36,6 @@ public class EnterpriseCameraAccessManager : MonoBehaviour
         get 
         { 
 #if UNITY_VISIONOS && !UNITY_EDITOR
-            if (_texture != null)
-            {
-                Vector2 scale = new Vector2(1, -1);
-                Vector2 offset = new Vector2(0, 1);
-                
-                Graphics.Blit(_texture, _renderTexture, scale, offset);
-                
-                // 重用Texture2D对象而不是每次都创建新的
-                if (_cachedResultTexture == null || _cachedResultTexture.width != _renderTexture.width || _cachedResultTexture.height != _renderTexture.height)
-                {
-                    if (_cachedResultTexture != null)
-                        Destroy(_cachedResultTexture);
-                    _cachedResultTexture = new Texture2D(_renderTexture.width, _renderTexture.height, TextureFormat.RGBA32, false);
-                }
-                
-                // 从RenderTexture读取像素到已存在的Texture2D
-                RenderTexture.active = _renderTexture;
-                _cachedResultTexture.ReadPixels(new Rect(0, 0, _renderTexture.width, _renderTexture.height), 0, 0);
-                _cachedResultTexture.Apply();
-                RenderTexture.active = null;
-                
-                return _cachedResultTexture;
-            }
             return _texture;
 #else
             return tmpTexture;

@@ -8,13 +8,12 @@ public class SuperAdmin : MonoBehaviour
 {
     [Header("设置区")]
     public bool isDebug=true;
-    public bool isEnableBLE=true;
     public bool isEnableVFX=true;
     
     [Header("Leave me alone")]
     public BLESendJointV Ble;
 
-    [Header("视觉相关Debug")] 
+    [Header("视觉相关配置")] 
     [Tooltip("是否显示实时的摄像头画面")]
     public bool isShowCameraImage = true;
     
@@ -28,7 +27,7 @@ public class SuperAdmin : MonoBehaviour
     [Tooltip("yolo识别的结果的显示控件")]
     public GameObject yoloResultImg;
 
-    [Header("Hand相关Debug")] 
+    [Header("Hand相关配置")] 
     [Tooltip("如果关闭, 所有涉及Hand相关的功能都将关闭")]
     public bool isEnableHandDetection = true;
     public GameObject handFuncAll;
@@ -63,6 +62,14 @@ public class SuperAdmin : MonoBehaviour
     
     [Tooltip("是否输出YOLO推理的详细日志信息(包括检测框数量、坐标等)")]
     public bool enableYoloDebugLogs = false;
+    
+    
+    [Header("蓝牙BLE相关配置")] 
+    public bool isEnableBLE=true;
+    
+    [Tooltip("是否在控制台显示BLE调试信息")]
+    public bool showBLEDebugInfo = true;
+    
     
     [Header("平台信息")]
     [Tooltip("指示当前运行平台")]

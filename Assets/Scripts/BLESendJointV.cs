@@ -4,6 +4,7 @@ using System.Collections;
 using TMPro;
 using UnityEngine.UI;
 using UnityEngine.XR.Hands;
+using System;
 
 /// <summary>
 /// 使用食指尖速度来控制BLE发送的速度参数
@@ -22,9 +23,7 @@ public class BLESendJointV : MonoBehaviour
 
     [SerializeField] [Tooltip("用于显示手指速度的文本组件")]
     private Text m_VelocityText;
-
-    [SerializeField] [Tooltip("用于调整速度倍率的Slider")]
-    private UnityEngine.UI.Slider m_VelocitySlider;
+    
 
     [SerializeField] [Tooltip("发送数据的间隔时间（秒）")]
     private float m_SendInterval = 0.5f;
@@ -40,10 +39,7 @@ public class BLESendJointV : MonoBehaviour
 
     [SerializeField] [Tooltip("正常播放时的音量（0-100）")]
     private byte m_NormalVolume = 75;
-
-    [SerializeField] [Tooltip("是否在控制台显示调试信息")]
-    private bool m_ShowDebugInfo = true;
-
+    
     [SerializeField] [Tooltip("在编辑器中模拟速度值（仅供测试）")]
     private float m_SimulatedVelocity = 0.15f;
 
@@ -108,12 +104,22 @@ public class BLESendJointV : MonoBehaviour
     private int m_ConsecutiveFailures = 0;
     private System.DateTime m_LastSuccessfulSend = System.DateTime.Now;
     private bool m_ConnectionLost = false;
+    
+    [Header("Web设置")]
+    [SerializeField] [Tooltip("从服务器获取速度倍率的组件")]
+    private ReadSthFromServer m_ReadSthFromServer;
 
     // 用于显示原始数据和滤波后数据的对比
     private Vector3 m_RawVelocity = Vector3.zero;
     private float m_RawMagnitude = 0f;
     private Vector3 m_FilteredVelocity = Vector3.zero;
     private float m_FilteredMagnitude = 0f;
+    
+    // 检查是否应该显示调试信息
+    private bool ShouldShowDebugInfo()
+    {
+        return SuperAdmin.superAdmin != null ? SuperAdmin.superAdmin.showBLEDebugInfo : false;
+    }
 
     // 最小速度和最大速度的字节值
     private const byte MIN_SPEED_BYTE = 10; // 1.0x
@@ -149,13 +155,22 @@ public class BLESendJointV : MonoBehaviour
                 return;
             }
         }
-
-        // 注册Slider事件（如果已分配）
-        if (m_VelocitySlider != null)
+        
+        // 初始化Web数据
+        if (m_ReadSthFromServer != null)
         {
-            m_VelocitySlider.onValueChanged.AddListener(OnVelocitySliderChanged);
+            // 从ReadSthFromServer获取初始音量设置
+            m_NormalVolume = m_ReadSthFromServer.GetCurrentNormalVolume(m_NormalVolume);
+            
+            // 从ReadSthFromServer获取音量阈值设置
+            float serverThreshold = m_ReadSthFromServer.GetCurrentVolumeThreshold(m_VolumeThreshold);
+            
+            if (ShouldShowDebugInfo())
+            {
+                Debug.Log($"初始化正常音量: {m_NormalVolume}, 音量阈值: {serverThreshold:F3} m/s");
+            }
         }
-
+        
         if (m_FilterStrengthSlider != null)
         {
             m_FilterStrengthSlider.value = m_VelocityFilterStrength;
@@ -180,12 +195,7 @@ public class BLESendJointV : MonoBehaviour
 
     void OnDestroy()
     {
-        // 移除Slider监听器
-        if (m_VelocitySlider != null)
-        {
-            m_VelocitySlider.onValueChanged.RemoveListener(OnVelocitySliderChanged);
-        }
-
+        
         if (m_FilterStrengthSlider != null)
         {
             m_FilterStrengthSlider.onValueChanged.RemoveListener(OnFilterStrengthSliderChanged);
@@ -520,12 +530,25 @@ public class BLESendJointV : MonoBehaviour
         m_RawMagnitude = rawVelocity.magnitude;
 
         // 根据原始速度决定音量
-        if (m_RawMagnitude < m_VolumeThreshold)
+        float volumeThreshold = m_VolumeThreshold; // 默认使用本地设置
+        
+        // 优先从服务器获取阈值
+        if (m_ReadSthFromServer != null)
+        {
+            volumeThreshold = m_ReadSthFromServer.GetCurrentVolumeThreshold(m_VolumeThreshold);
+        }
+        
+        if (m_RawMagnitude < volumeThreshold)
         {
             m_CurrentVolume = 0; // 原始速度低于阈值时静音
         }
         else
         {
+            // 优先从服务器获取音量设置
+            if (m_ReadSthFromServer != null)
+            {
+                m_NormalVolume = m_ReadSthFromServer.GetCurrentNormalVolume(m_NormalVolume);
+            }
             m_CurrentVolume = m_NormalVolume; // 使用正常音量
         }
 
@@ -549,10 +572,15 @@ public class BLESendJointV : MonoBehaviour
         m_FilteredVelocity = filteredVelocity;
         m_FilteredMagnitude = filteredMagnitude;
 
-        // 如果有滑块，获取当前倍率值
-        if (m_VelocitySlider != null)
+        // 从ReadSthFromServer获取当前倍率值
+        if (m_ReadSthFromServer != null)
         {
-            m_VelocityMultiplier = m_VelocitySlider.value;
+            m_VelocityMultiplier = m_ReadSthFromServer.VelocityRatio;
+        }
+        // 没有ReadSthFromServer时使用默认值1.0
+        else
+        {
+            m_VelocityMultiplier = 1.0f;
         }
 
         // 确保倍率不为负数或零
@@ -660,10 +688,14 @@ public class BLESendJointV : MonoBehaviour
         float basePlaybackRate = m_CurrentSpeedByte / 10f; // 原始映射速率（1.0x-4.0x）
         float adjustedRate = basePlaybackRate;
 
-        // 如果有滑块，直接使用滑块的值作为倍率
-        if (m_VelocitySlider != null)
+        // 从ReadSthFromServer获取倍率
+        if (m_ReadSthFromServer != null)
         {
-            m_VelocityMultiplier = m_VelocitySlider.value;
+            m_VelocityMultiplier = m_ReadSthFromServer.VelocityRatio;
+        }
+        else // 没有ReadSthFromServer时使用默认值1.0
+        {
+            m_VelocityMultiplier = 1.0f;
         }
 
         // 应用倍率
@@ -736,7 +768,7 @@ public class BLESendJointV : MonoBehaviour
             m_ConsecutiveFailures = 0;
             m_LastSuccessfulSend = System.DateTime.Now;
 
-            if (m_ShowDebugInfo)
+            if (ShouldShowDebugInfo())
             {
                 // 打印发送的数据用于调试
                 string hexString = System.BitConverter.ToString(data).Replace("-", " ");
@@ -851,7 +883,14 @@ public class BLESendJointV : MonoBehaviour
                 // 显示原始速度、滤波后速度、映射后的速度和音量状态
                 string filterInfo = m_EnableVelocityFilter ? $"(filter strength: {m_VelocityFilterStrength:F2})" : "(no filter)";
                 string volumeStatus = m_CurrentVolume == 0 ? "Mute" : $"Volume {m_CurrentVolume}%";
-                m_VelocityText.text = $"Ori V: {m_RawMagnitude:F3} m/s\nFiltered V: {m_FilteredMagnitude:F3} m/s {filterInfo}\nPlay V: {m_CurrentSpeedByte / 10f:F1}x\nFactor: {(m_VelocitySlider != null ? m_VelocitySlider.value : m_VelocityMultiplier):F1}\n{volumeStatus}";
+                // 从ReadSthFromServer获取倍率
+                float velocityRatio = m_VelocityMultiplier;
+                if (m_ReadSthFromServer != null)
+                {
+                    velocityRatio = m_ReadSthFromServer.VelocityRatio;
+                }
+                
+                m_VelocityText.text = $"Ori V: {m_RawMagnitude:F3} m/s\nFiltered V: {m_FilteredMagnitude:F3} m/s {filterInfo}\nPlay V: {m_CurrentSpeedByte / 10f:F1}x\nFactor: {velocityRatio:F1}\n{volumeStatus}";
 
                 // 根据滤波后的速度变化颜色，静音时显示灰色
                 if (m_CurrentVolume == 0)
@@ -908,35 +947,6 @@ public class BLESendJointV : MonoBehaviour
         }
     }
     
-    /// <summary>
-    /// 设置速度倍率滑块
-    /// </summary>
-    /// <param name="slider">用于控制速度倍率的滑块</param>
-    public void SetVelocitySlider(UnityEngine.UI.Slider slider)
-    {
-        // 移除之前的监听器（如果有）
-        if (m_VelocitySlider != null)
-        {
-            m_VelocitySlider.onValueChanged.RemoveListener(OnVelocitySliderChanged);
-        }
-
-        // 设置新的滑块并添加监听器
-        m_VelocitySlider = slider;
-
-        if (m_VelocitySlider != null)
-        {
-            // 设置滑块初始值为当前倍率
-            m_VelocitySlider.value = m_VelocityMultiplier;
-
-            // 添加值变化监听器
-            m_VelocitySlider.onValueChanged.AddListener(OnVelocitySliderChanged);
-
-            if (m_ShowDebugInfo)
-            {
-                Debug.Log($"Velocity multiplier slider set, current value: {m_VelocitySlider.value:F1}");
-            }
-        }
-    }
 
     /// <summary>
     /// 设置滤波强度滑块
@@ -961,31 +971,13 @@ public class BLESendJointV : MonoBehaviour
             // 添加值变化监听器
             m_FilterStrengthSlider.onValueChanged.AddListener(OnFilterStrengthSliderChanged);
 
-            if (m_ShowDebugInfo)
+            if (ShouldShowDebugInfo())
             {
                 Debug.Log($"Filter strength slider set, current value: {m_FilterStrengthSlider.value:F2}");
             }
         }
     }
 
-    /// <summary>
-    /// 获取当前实际播放速率（已应用倍率）
-    /// </summary>
-    /// <returns>实际播放速率(1.0x-4.0x)</returns>
-    public float GetActualPlaybackRate()
-    {
-        float basePlaybackRate = m_CurrentSpeedByte / 10f; // 原始映射速率（1.0x-4.0x）
-        return Mathf.Clamp(basePlaybackRate * m_VelocityMultiplier, 1.0f, 4.0f); // 应用倍率后的实际速率
-    }
-
-    /// <summary>
-    /// 响应速度倍率滑块值变化
-    /// </summary>
-    /// <param name="value">滑块的值</param>
-    private void OnVelocitySliderChanged(float value)
-    {
-        SetVelocityMultiplier(value);
-    }
 
     /// <summary>
     /// 响应滤波强度滑块值变化
@@ -1004,18 +996,27 @@ public class BLESendJointV : MonoBehaviour
     {
         // 确保倍率在合理范围内
         m_VelocityMultiplier = Mathf.Clamp(multiplier, 0.1f, 10.0f);
-
+        
+        // 注意：现在倍率主要由ReadSthFromServer控制，此方法主要用于兼容旧代码
+        
         // 立即更新速度显示
         UpdateFingerVelocityAndSpeed();
 
+        // 获取实际倍率（可能来自ReadSthFromServer）
+        float actualMultiplier = m_VelocityMultiplier;
+        if (m_ReadSthFromServer != null)
+        {
+            actualMultiplier = m_ReadSthFromServer.VelocityRatio;
+        }
+        
         // 计算实际会传输的速度值
         float basePlaybackRate = m_CurrentSpeedByte / 10f; // 原始映射速率（1.0x-4.0x）
-        float actualPlaybackRate = Mathf.Clamp(basePlaybackRate * m_VelocityMultiplier, 1.0f, 4.0f); // 应用倍率后的实际速率
+        float actualPlaybackRate = Mathf.Clamp(basePlaybackRate * actualMultiplier, 1.0f, 4.0f); // 应用倍率后的实际速率
         byte finalSpeedByte = (byte)Mathf.RoundToInt(actualPlaybackRate * 10); // 最终传输的字节值
 
-        if (m_ShowDebugInfo)
+        if (ShouldShowDebugInfo())
         {
-            Debug.Log($"Velocity multiplier set to: {m_VelocityMultiplier:F1}, Original speed: {basePlaybackRate:F1}x, Actual transmission speed: {actualPlaybackRate:F1}x (Value: {finalSpeedByte})");
+            Debug.Log($"Velocity multiplier set to: {actualMultiplier:F1}, Original speed: {basePlaybackRate:F1}x, Actual transmission speed: {actualPlaybackRate:F1}x (Value: {finalSpeedByte})");
         }
 
         // 如果正在发送数据，可以考虑立即发送一次最新速度的数据
@@ -1054,7 +1055,7 @@ public class BLESendJointV : MonoBehaviour
             m_MagnitudeFilter.SetFilterStrength(m_MagnitudeFilterStrength);
         }
 
-        if (m_ShowDebugInfo)
+        if (ShouldShowDebugInfo())
         {
             Debug.Log($"Filter strength set to: {m_VelocityFilterStrength:F2}");
         }
@@ -1068,42 +1069,14 @@ public class BLESendJointV : MonoBehaviour
     {
         m_VolumeThreshold = Mathf.Max(0f, threshold);
         
-        if (m_ShowDebugInfo)
-        {
-            Debug.Log($"Volume threshold set to: {m_VolumeThreshold:F3} m/s");
-        }
-    }
-
-    /// <summary>
-    /// 设置正常播放音量
-    /// </summary>
-    /// <param name="volume">音量值（0-100）</param>
-    public void SetNormalVolume(byte volume)
-    {
-        m_NormalVolume = (byte)Mathf.Clamp(volume, 0, 100);
+        // 注意：此处设置的是本地阈值，如果有ReadSthFromServer组件，将使用服务器的阈值
+        // 这里只是更新本地的默认值
         
-        if (m_ShowDebugInfo)
+        if (ShouldShowDebugInfo())
         {
-            Debug.Log($"Normal playback volume set to: {m_NormalVolume}%");
+            string serverNote = m_ReadSthFromServer != null ? $", Server threshold: {m_ReadSthFromServer.VolumeThreshold:F3} m/s" : "";
+            Debug.Log($"Local volume threshold set to: {m_VolumeThreshold:F3} m/s{serverNote}");
         }
-    }
-
-    /// <summary>
-    /// 获取当前音量状态
-    /// </summary>
-    /// <returns>当前音量值</returns>
-    public byte GetCurrentVolume()
-    {
-        return m_CurrentVolume;
-    }
-
-    /// <summary>
-    /// 是否处于静音状态
-    /// </summary>
-    /// <returns>true表示静音，false表示正常播放</returns>
-    public bool IsMuted()
-    {
-        return m_CurrentVolume == 0;
     }
 
     /// <summary>
@@ -1119,7 +1092,7 @@ public class BLESendJointV : MonoBehaviour
             m_VelocityFilter.Reset();
         }
 
-        if (m_ShowDebugInfo)
+        if (ShouldShowDebugInfo())
         {
             Debug.Log($"Velocity filter {(enable ? "enabled" : "disabled")}");
         }
@@ -1138,32 +1111,12 @@ public class BLESendJointV : MonoBehaviour
             m_MagnitudeFilter.Reset();
         }
 
-        if (m_ShowDebugInfo)
+        if (ShouldShowDebugInfo())
         {
             Debug.Log($"Magnitude filter {(enable ? "enabled" : "disabled")}");
         }
     }
-
-    /// <summary>
-    /// 重置所有滤波器
-    /// </summary>
-    public void ResetFilters()
-    {
-        if (m_VelocityFilter != null)
-        {
-            m_VelocityFilter.Reset();
-        }
-
-        if (m_MagnitudeFilter != null)
-        {
-            m_MagnitudeFilter.Reset();
-        }
-
-        if (m_ShowDebugInfo)
-        {
-            Debug.Log("All filters reset");
-        }
-    }
+    
 
     /// <summary>
     /// 获取滤波器状态信息
@@ -1172,45 +1125,25 @@ public class BLESendJointV : MonoBehaviour
     public string GetFilterStatus()
     {
         string volumeStatus = m_CurrentVolume == 0 ? "Muted" : $"Volume {m_CurrentVolume}%";
+        
+        // 获取当前有效的阈值(可能来自服务器)
+        float currentThreshold = m_VolumeThreshold;
+        string thresholdSource = "(Local)";
+        
+        if (m_ReadSthFromServer != null)
+        {
+            currentThreshold = m_ReadSthFromServer.GetCurrentVolumeThreshold(m_VolumeThreshold);
+            thresholdSource = "(Server)";
+        }
+        
         return $"Velocity filter: {(m_EnableVelocityFilter ? "Enabled" : "Disabled")} (Strength: {m_VelocityFilterStrength:F2})\n" +
                $"Magnitude filter: {(m_EnableMagnitudeFilter ? "Enabled" : "Disabled")} (Strength: {m_MagnitudeFilterStrength:F2})\n" +
                $"Raw velocity: {m_RawMagnitude:F3} m/s\n" +
                $"Filtered velocity: {m_FilteredMagnitude:F3} m/s\n" +
-               $"Volume threshold: {m_VolumeThreshold:F3} m/s\n" +
+               $"Volume threshold: {currentThreshold:F3} m/s {thresholdSource}\n" +
                $"Current status: {volumeStatus}";
     }
-
-    /// <summary>
-    /// 切换数据发送状态
-    /// </summary>
-    public void ToggleDataTransmission()
-    {
-        if (m_DataSendCoroutine != null)
-        {
-            StopDataTransmission();
-            Debug.Log("Data transmission stopped");
-        }
-        else if (m_IsConnectedAndReady && m_IsScanStopped && !m_ConnectionLost)
-        {
-            StartDataTransmission();
-            Debug.Log("Data transmission started");
-        }
-        else if (!m_IsScanStopped)
-        {
-            Debug.LogWarning("Scan not stopped yet, cannot send data");
-        }
-        else if (m_ConnectionLost)
-        {
-            Debug.LogWarning("Connection lost, cannot start transmission");
-            
-            // 如果Connection Lost但未在重连，可以尝试重连
-            if (m_AutoReconnect && !m_IsReconnecting)
-            {
-                Debug.Log("Attempting to reconnect before starting transmission");
-                StartReconnectProcess();
-            }
-        }
-    }
+    
     
     /// <summary>
     /// 手动触发重连（可以通过UI按钮调用）

@@ -13440,7 +13440,7 @@ GameObject:
   - component: {fileID: 463939314}
   - component: {fileID: 463939313}
   m_Layer: 5
-  m_Name: Hands Dis
+  m_Name: BLE status
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -13498,7 +13498,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: 'Hands control ball radius: '
+  m_Text: 'BLE status: '
 --- !u!222 &463939314
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -13526,6 +13526,10 @@ PrefabInstance:
     - target: {fileID: 3118527933232922815, guid: 15a9b237705404ff6ba6c6defced5a84, type: 3}
       propertyPath: m_Layer
       value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 3475604911566850582, guid: 15a9b237705404ff6ba6c6defced5a84, type: 3}
+      propertyPath: m_Enabled
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3475604911566850582, guid: 15a9b237705404ff6ba6c6defced5a84, type: 3}
       propertyPath: m_fontSize
@@ -14100,6 +14104,10 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7848517822242556463, guid: 15a9b237705404ff6ba6c6defced5a84, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7848517822242556463, guid: 15a9b237705404ff6ba6c6defced5a84, type: 3}
       propertyPath: m_fontSize
       value: 16
       objectReference: {fileID: 0}
@@ -14192,7 +14200,8 @@ RectTransform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
-  m_Children: []
+  m_Children:
+  - {fileID: 1648657921}
   m_Father: {fileID: 5423332253655786682}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -15124,14 +15133,13 @@ RectTransform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 817012952}
+  m_Children: []
   m_Father: {fileID: 5423332253655786682}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 200}
+  m_SizeDelta: {x: 0, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &705433518
 MonoBehaviour:
@@ -15160,13 +15168,13 @@ MonoBehaviour:
     m_BestFit: 0
     m_MinSize: 0
     m_MaxSize: 80
-    m_Alignment: 3
+    m_Alignment: 4
     m_AlignByGeometry: 0
     m_RichText: 1
     m_HorizontalOverflow: 1
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: 'Finger Velocity: '
+  m_Text: 'Finger Velocity:'
 --- !u!222 &705433519
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -15649,16 +15657,16 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 817012951}
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 112.2}
+  m_LocalPosition: {x: 0, y: 0, z: 60.100037}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 705433517}
+  m_Father: {fileID: 5423332253655786682}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 647.19995, y: -116.79993}
-  m_SizeDelta: {x: 646, y: 100}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 500}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &817012953
 MonoBehaviour:
@@ -17363,6 +17371,85 @@ Transform:
   - {fileID: 1490907961}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1094845410
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1094845411}
+  - component: {fileID: 1094845413}
+  - component: {fileID: 1094845412}
+  m_Layer: 5
+  m_Name: Hands Dis (1)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &1094845411
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1094845410}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 5423332253655786682}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 51}
+  m_Pivot: {x: 0.5, y: 0.5}
+--- !u!114 &1094845412
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1094845410}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_Material: {fileID: 0}
+  m_Color: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
+  m_RaycastTarget: 1
+  m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
+  m_Maskable: 1
+  m_OnCullStateChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_FontData:
+    m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+    m_FontSize: 45
+    m_FontStyle: 0
+    m_BestFit: 0
+    m_MinSize: 0
+    m_MaxSize: 80
+    m_Alignment: 3
+    m_AlignByGeometry: 0
+    m_RichText: 1
+    m_HorizontalOverflow: 1
+    m_VerticalOverflow: 1
+    m_LineSpacing: 1
+  m_Text: 'Hands control ball radius: '
+--- !u!222 &1094845413
+CanvasRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1094845410}
+  m_CullTransparentMesh: 1
 --- !u!4 &1115528834 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2174698698059701097, guid: a6538f3caa42948eab3f24592a350000, type: 3}
@@ -19390,20 +19477,18 @@ MonoBehaviour:
   m_VolumeThreshold: 0.1
   m_NormalVolume: 75
   m_SimulatedVelocity: 0.15
-  m_EnableVelocityFilter: 0
+  m_EnableVelocityFilter: 1
   m_VelocityFilter: {fileID: 2054631609}
   m_MagnitudeFilter: {fileID: 1912603854}
   m_VelocityFilterStrength: 0.3
-  m_EnableMagnitudeFilter: 0
+  m_EnableMagnitudeFilter: 1
   m_MagnitudeFilterStrength: 0.45
-  m_FilterStrengthSlider: {fileID: 0}
   m_DeviceName: ESP32-BLE,FeltSight BLE
   m_AutoReconnect: 1
   m_ReconnectInterval: 3
   m_MaxReconnectAttempts: 0
-  m_ConnectionStatusText: {fileID: 0}
+  m_ConnectionStatusText: {fileID: 463939313}
   m_FailureThreshold: 3
-  m_ReadSthFromServer: {fileID: 1971586292}
 --- !u!114 &1461729648
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -20277,16 +20362,16 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1648657920}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.031749994, y: -0.39777005, z: -1.6755}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalRotation: {x: -0, y: -0.2164396, z: -0, w: 0.97629607}
+  m_LocalPosition: {x: -436, y: -661, z: -84}
+  m_LocalScale: {x: 999.9999, y: 999.9999, z: 999.9999}
   m_ConstrainProportionsScale: 1
   m_Children:
   - {fileID: 707954745}
   - {fileID: 219978129}
   - {fileID: 662246943}
   - {fileID: 583023528}
-  m_Father: {fileID: 2101802427}
+  m_Father: {fileID: 501591311}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1655764262
 GameObject:
@@ -22663,9 +22748,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   baseUrl: https://hhkeds-fnylsm-5000.preview.cloudstudio.work/
-  apiPath: /velocity_ratio
   updateInterval: 1
   VelocityRatio: 1
+  NormalVolume: 75
+  VolumeThreshold: 0.015
+  MaxVelocityThreshold: 0.3
+  EnableMagnitudeFilter: 1
+  EnableVelocityFilter: 1
+  VelocityFilterStrength: 0.1
+  MagnitudeFilterStrength: 0.15
+  bleController: {fileID: 1461729647}
 --- !u!1 &1989642378
 GameObject:
   m_ObjectHideFlags: 0
@@ -24079,7 +24171,6 @@ Transform:
   m_Children:
   - {fileID: 1441915303}
   - {fileID: 242179459}
-  - {fileID: 1648657921}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2105344724
@@ -25252,13 +25343,19 @@ PrefabInstance:
       addedObject: {fileID: 1737357751405107051}
     - targetCorrespondingSourceObject: {fileID: 4956617155759966971, guid: 49348039b7d774d86bcfcebecd60d375, type: 3}
       insertIndex: -1
-      addedObject: {fileID: 463939312}
+      addedObject: {fileID: 1094845411}
     - targetCorrespondingSourceObject: {fileID: 4956617155759966971, guid: 49348039b7d774d86bcfcebecd60d375, type: 3}
       insertIndex: -1
       addedObject: {fileID: 400078011}
     - targetCorrespondingSourceObject: {fileID: 4956617155759966971, guid: 49348039b7d774d86bcfcebecd60d375, type: 3}
       insertIndex: -1
       addedObject: {fileID: 705433517}
+    - targetCorrespondingSourceObject: {fileID: 4956617155759966971, guid: 49348039b7d774d86bcfcebecd60d375, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 817012952}
+    - targetCorrespondingSourceObject: {fileID: 4956617155759966971, guid: 49348039b7d774d86bcfcebecd60d375, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 463939312}
     - targetCorrespondingSourceObject: {fileID: 4956617155759966971, guid: 49348039b7d774d86bcfcebecd60d375, type: 3}
       insertIndex: -1
       addedObject: {fileID: 9680474}

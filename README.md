@@ -46,20 +46,10 @@ This project combines Apple Vision Pro with custom haptic gloves to create an im
 - Arduino IDE
 - Visual Studio Code (optional)
 
-## Project Structure
-```
-feltsight/
-├── unity/                  # Unity Vision Pro project
-├── gloves-sdk/            # Gloves Unity SDK
-├── firmware/              # Gloves firmware
-├── design/                # Gloves design files
-└── docs/                  # Documentation
-```
 
 ## Getting Started
 
 1. Clone this repository
-2. Follow the setup instructions in each component's README
 3. Build and deploy the Unity application to Vision Pro
 4. Flash the firmware to the gloves
 5. Connect and test the system
@@ -70,13 +60,59 @@ MIT License
 
 # FeltSight - Vision Pro Unity Application
 
-This is the main Unity application that runs on Apple Vision Pro and handles the interaction with haptic gloves.
+This is a Unity 6000.1.5f1 project configured for Apple Vision Pro development with the following key components:
+
+## Core Systems
+- **Hand Tracking**: Uses Unity XR Hands with custom `MyHand.cs` component for hand pose tracking and distance calculations
+- **BLE Communication**: `BLESendJointV.cs` handles Bluetooth communication with haptic gloves using finger velocity mapping
+- **Visual Effects**: VFX Graph-based visual effects in `/Assets/VFX/` with `VFXMan.cs` controller
+- **AR Mesh Processing**: Handles Vision Pro mesh data for spatial interactions
+- **YOLO Integration**: Computer vision pipeline using Barracuda for object detection/segmentation
 
 ## Features
 - Vision Pro hand tracking integration
 - Haptic glove communication
 - Art interaction system
 - Real-time feedback
+
+
+### Key Scripts Architecture
+
+#### Hand Tracking (`/Assets/Scripts/`)
+- `MyHand.cs` - Core hand tracking with pose data, palm distance calculations, and finger velocity tracking
+- `HandRaycaster.cs` - Hand-based raycasting for spatial interactions  
+- `HandVisualizer.cs` - Visual representation of hand data
+
+#### BLE Communication
+- `BLESendJointV.cs` - Maps finger velocity (0-0.3 m/s) to BLE speed parameters (1.0x-4.0x) with OneDollar filtering
+- `ReadSthFromServer.cs` - Fetches configuration parameters from a web server and applies them to BLESendJointV
+- `/Assets/Scripts/Library/CoreBluetooth/` - Core Bluetooth wrapper for Unity-iOS communication
+- `/Assets/Scripts/Library/NativeInterface/` - Native iOS interface layer
+
+#### Computer Vision (`/Assets/Scripts/Library/Yolo/`)
+- `Detector.cs` - Main YOLO detection controller using Barracuda
+- `YOLOv8.cs` and `YOLOv8Segmentation.cs` - YOLO model implementations
+- `/Assets/Scripts/Library/Yolo/TextureProviders/` - Camera and video input providers
+
+#### VFX System (`/Assets/VFX/`)
+- `VFXMan.cs` - Controls Visual Effect Graph assets with AR mesh integration
+- Custom VFX operators for spatial effects and mesh interactions
+
+### Unity Packages
+Key dependencies from `manifest.json`:
+- `com.unity.xr.visionos`: "2.2.4" - Vision Pro platform support
+- `com.unity.xr.hands`: "1.5.1" - Hand tracking
+- `com.unity.xr.interaction.toolkit`: "3.1.2" - XR interactions  
+- `com.unity.visualeffectgraph`: "17.1.0" - VFX system
+- `com.unity.barracuda` - Machine learning inference
+- `com.unity.render-pipelines.universal`: "17.1.0" - URP rendering
+
+### Scenes
+- `DebugVFX.unity` - Main Sceen
+- `DebugHandGestures.unity` - Hand tracking testing and debugging
+- `YoloScenes/Detection.unity` - Object detection testing
+- `YoloScenes/Segmentation.unity` - Segmentation testing
+
 
 ## Setup
 
@@ -94,13 +130,9 @@ This is the main Unity application that runs on Apple Vision Pro and handles the
 ## Project Structure
 ```
 unity/
-├── Assets/
-│   ├── Scripts/           # C# scripts
-│   ├── Prefabs/          # Unity prefabs
-│   ├── Materials/        # Materials and shaders
-│   ├── Scenes/           # Unity scenes
-│   └── Plugins/          # Third-party plugins
-├── Packages/             # Package dependencies
+├── Assets/ # Unity Project
+├── Hardware/            # Glove design and program
+├── Packages/             # Unity Project
 └── ProjectSettings/      # Unity project settings
 ```
 

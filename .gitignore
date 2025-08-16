@@ -121,3 +121,7 @@ Assets/UnityXRContent.meta
 App_BurstDebugInformation_DoNotShip/
 
 Builds_BurstDebugInformation_DoNotShip/
+
+ContentPackages/
+
+*.blob

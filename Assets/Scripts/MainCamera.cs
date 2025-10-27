@@ -119,6 +119,8 @@ public class MainCamera : MonoBehaviour
         
         // 加载模型
         LoadModel();
+        imageWidth = SuperAdmin.superAdmin.modelInputWidth;
+        imageHeight = SuperAdmin.superAdmin.modelInputHeight;
         
         // 创建渲染纹理
         if (imageWidth > 0 && imageHeight > 0)

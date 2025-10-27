@@ -260,7 +260,7 @@ public class VFXMan : MonoBehaviour
 
         if (nearbyMeshes.Count == 0)
         {
-            Debug.Log("No nearby meshes found");
+            // Debug.Log("No nearby meshes found");
             return;
         }
 

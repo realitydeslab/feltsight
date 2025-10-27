@@ -216,7 +216,10 @@ public class BLESendJointV : MonoBehaviour
             {
                 if (peripheral.name != "" && peripheral.name != null && peripheral.name != "(null-name)" && peripheral.name != "null-name")
                 {
-                    Debug.Log("Device discovered: " + peripheral.name);
+                    if (ShouldShowDebugInfo())
+                    {
+                        Debug.Log("Device discovered: " + peripheral.name);
+                    }
                 }
 
                 // 检查设备名称是否在目标列表中
@@ -326,8 +329,11 @@ public class BLESendJointV : MonoBehaviour
         // 如果超过发送间隔的5倍，且连续失败次数超过阈值，认为Connection Lost
         if (secondsSinceLastSuccess > m_SendInterval * 5 && m_ConsecutiveFailures >= m_FailureThreshold)
         {
-            Debug.Log($"Connection appears to be lost: {m_ConsecutiveFailures} consecutive failures, " +
-                     $"{secondsSinceLastSuccess:F1}s since last successful send");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.Log($"Connection appears to be lost: {m_ConsecutiveFailures} consecutive failures, " +
+                         $"{secondsSinceLastSuccess:F1}s since last successful send");
+            }
             
             m_ConnectionLost = true;
             m_IsConnectedAndReady = false;
@@ -355,7 +361,10 @@ public class BLESendJointV : MonoBehaviour
         try
         {
             m_IsScanStopped = false;
-            Debug.Log("Starting BLE scan...");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.Log("Starting BLE scan...");
+            }
             UpdateConnectionStatusUI("Scanning Devices...");
             m_Manager.StartScan();
         }
@@ -405,14 +414,20 @@ public class BLESendJointV : MonoBehaviour
             // 检查最大重连次数
             if (m_MaxReconnectAttempts > 0 && m_ReconnectAttempts >= m_MaxReconnectAttempts)
             {
-                Debug.Log($"Maximum reconnect attempts ({m_MaxReconnectAttempts}) reached, stopping reconnect process");
+                if (ShouldShowDebugInfo())
+                {
+                    Debug.Log($"Maximum reconnect attempts ({m_MaxReconnectAttempts}) reached, stopping reconnect process");
+                }
                 UpdateConnectionStatusUI($"Reconnect Failed: Max attempts reached ({m_MaxReconnectAttempts})");
                 m_IsReconnecting = false;
                 yield break;
             }
 
             m_ReconnectAttempts++;
-            Debug.Log($"Attempting to reconnect (attempt {m_ReconnectAttempts})...");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.Log($"Attempting to reconnect (attempt {m_ReconnectAttempts})...");
+            }
             UpdateConnectionStatusUI($"Reconnecting (Attempt {m_ReconnectAttempts})...");
 
             // 如果有之前连接的设备，尝试直接连接
@@ -420,7 +435,10 @@ public class BLESendJointV : MonoBehaviour
             {
                 
                 {
-                    Debug.Log($"Trying to reconnect to last device: {m_ConnectedPeripheral.name}");
+                    if (ShouldShowDebugInfo())
+                    {
+                        Debug.Log($"Trying to reconnect to last device: {m_ConnectedPeripheral.name}");
+                    }
                     m_IsConnecting = true;
                     m_Manager.ConnectToPeripheral(m_ConnectedPeripheral);
                     
@@ -435,7 +453,10 @@ public class BLESendJointV : MonoBehaviour
                     // 如果连接成功，退出重连循环
                     if (m_IsConnectedAndReady)
                     {
-                        Debug.Log("Reconnection successful");
+                        if (ShouldShowDebugInfo())
+                        {
+                            Debug.Log("Reconnection successful");
+                        }
                         m_IsReconnecting = false;
                         m_ConnectionLost = false;
                         yield break;
@@ -463,7 +484,10 @@ public class BLESendJointV : MonoBehaviour
                 // 如果连接成功，退出重连循环
                 if (m_IsConnectedAndReady)
                 {
-                    Debug.Log("Reconnection successful after scan");
+                    if (ShouldShowDebugInfo())
+                    {
+                        Debug.Log("Reconnection successful after scan");
+                    }
                     m_IsReconnecting = false;
                     m_ConnectionLost = false;
                     yield break;
@@ -560,12 +584,18 @@ public class BLESendJointV : MonoBehaviour
         // 确保扫描已停止后才开始发送数据
         if (m_IsScanStopped)
         {
-            Debug.Log("Starting periodic data transmission");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.Log("Starting periodic data transmission");
+            }
             m_DataSendCoroutine = StartCoroutine(SendDataPeriodically());
         }
         else
         {
-            Debug.LogWarning("Scan not stopped yet, cannot send data");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.LogWarning("Scan not stopped yet, cannot send data");
+            }
         }
     }
 
@@ -603,21 +633,30 @@ public class BLESendJointV : MonoBehaviour
                 }
                 else
                 {
-                    Debug.LogWarning("BLE characteristic not available, waiting for next attempt");
+                    if (ShouldShowDebugInfo())
+                    {
+                        Debug.LogWarning("BLE characteristic not available, waiting for next attempt");
+                    }
                     m_ConsecutiveFailures++;
                 }
             }
             catch (System.Exception e)
             {
                 // 捕获所有异常，确保协程不会因任何错误而中断
-                Debug.LogWarning($"Error occurred during transmission cycle, but continuing: {e.Message}");
+                if (ShouldShowDebugInfo())
+                {
+                    Debug.LogWarning($"Error occurred during transmission cycle, but continuing: {e.Message}");
+                }
                 m_ConsecutiveFailures++;
             }
 
             yield return new WaitForSeconds(m_SendInterval);
         }
         
-        Debug.Log("Data transmission stopped due to connection loss or state change");
+        if (ShouldShowDebugInfo())
+        {
+            Debug.Log("Data transmission stopped due to connection loss or state change");
+        }
     }
 
     /// <summary>
@@ -672,7 +711,10 @@ public class BLESendJointV : MonoBehaviour
     {
         if (m_Characteristic == null || !m_IsConnectedAndReady || m_ConnectionLost)
         {
-            Debug.LogWarning("Characteristic not ready or connection lost");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.LogWarning("Characteristic not ready or connection lost");
+            }
             m_ConsecutiveFailures++;
             
             // 如果连续失败次数超过阈值，触发重连
@@ -683,7 +725,10 @@ public class BLESendJointV : MonoBehaviour
                 
                 if (m_AutoReconnect && !m_IsReconnecting)
                 {
-                    Debug.Log($"Connection appears to be lost after {m_ConsecutiveFailures} consecutive failures");
+                    if (ShouldShowDebugInfo())
+                    {
+                        Debug.Log($"Connection appears to be lost after {m_ConsecutiveFailures} consecutive failures");
+                    }
                     UpdateConnectionStatusUI("Connection Lost, Reconnecting...");
                     StartReconnectProcess();
                 }
@@ -721,7 +766,10 @@ public class BLESendJointV : MonoBehaviour
         catch (System.Exception e)
         {
             // 记录错误并增加连续失败计数
-            Debug.LogWarning($"Failed to send data: {e.Message}");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.LogWarning($"Failed to send data: {e.Message}");
+            }
             m_ConsecutiveFailures++;
             
             // 如果连续失败次数超过阈值，触发重连
@@ -732,7 +780,10 @@ public class BLESendJointV : MonoBehaviour
                 
                 if (m_AutoReconnect && !m_IsReconnecting)
                 {
-                    Debug.Log($"Connection appears to be lost after {m_ConsecutiveFailures} consecutive failures");
+                    if (ShouldShowDebugInfo())
+                    {
+                        Debug.Log($"Connection appears to be lost after {m_ConsecutiveFailures} consecutive failures");
+                    }
                     UpdateConnectionStatusUI("Connection Lost, Reconnecting...");
                     StartReconnectProcess();
                 }
@@ -755,6 +806,8 @@ public class BLESendJointV : MonoBehaviour
             return;
         }
 
+        // LogDataContent is only called from within a ShouldShowDebugInfo() block,
+        // so we don't need to check again here
         Debug.Log("=== Data Content ===");
         for (int i = 0; i < 10; i++)
         {

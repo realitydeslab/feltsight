@@ -18,6 +18,9 @@ public class BLESendJointV : MonoBehaviour
     [SerializeField] [Tooltip("要使用的手部追踪组件")]
     private MyHand m_HandTracker;
 
+    [SerializeField] [Tooltip("ScreenSpaceProjector组件引用")]
+    private ScreenSpaceProjector m_ScreenSpaceProjector;
+
     [SerializeField] [Tooltip("要使用的手（左手或右手）")]
     private Handedness m_HandToUse = Handedness.Right;
 
@@ -146,6 +149,16 @@ public class BLESendJointV : MonoBehaviour
                 Debug.LogError("MyHand component not found, please assign manually");
                 enabled = false;
                 return;
+            }
+        }
+        
+        // 初始化ScreenSpaceProjector引用
+        if (m_ScreenSpaceProjector == null)
+        {
+            m_ScreenSpaceProjector = FindFirstObjectByType<ScreenSpaceProjector>();
+            if (m_ScreenSpaceProjector == null)
+            {
+                Debug.LogWarning("ScreenSpaceProjector component not found, material type data will not be available");
             }
         }
         
@@ -687,9 +700,14 @@ public class BLESendJointV : MonoBehaviour
         {
             int offset = 1 + channel * 3;
 
-            // 文件索引：循环使用0x01-0x0A
-            // data[offset] = (byte)((counter + channel) % 10 + 1);
-            data[offset] = (byte)(1);
+            // 文件索引：从ScreenSpaceProjector的fingerMats获取材质类型
+            byte fileIndex = 1; // 默认值
+            if (m_ScreenSpaceProjector != null)
+            {
+                string materialType = m_ScreenSpaceProjector.fingerMats[channel];
+                fileIndex = MapMaterialToIndex(materialType);
+            }
+            data[offset] = fileIndex;
 
             // 音量：根据原始速度决定是否静音
             data[offset + 1] = m_CurrentVolume;
@@ -1033,6 +1051,34 @@ public class BLESendJointV : MonoBehaviour
     }
     
     
+    /// <summary>
+    /// 将材质类型映射到文件索引
+    /// </summary>
+    /// <param name="materialType">材质类型字符串</param>
+    /// <returns>对应的文件索引(1-12)，如果未找到匹配则返回1</returns>
+    private byte MapMaterialToIndex(string materialType)
+    {
+        if (string.IsNullOrEmpty(materialType))
+            return 1; // 默认值
+
+        switch (materialType.ToUpper())
+        {
+            case "M1": return 1;   // 金属
+            case "M2": return 2;   // 玻璃/陶瓷
+            case "M3": return 3;   // 硬塑
+            case "M4": return 4;   // 木材
+            case "M5": return 5;   // 石材/水泥
+            case "M6": return 6;   // 织物/毛皮
+            case "M7": return 7;   // 皮革/橡胶
+            case "M8": return 8;   // 纸/纸板
+            case "M9": return 9;   // 食物软组织
+            case "M10": return 10; // 植被/土壤
+            case "M11": return 11; // 电子玻璃面板
+            case "M12": return 12; // 泡沫/海绵/复合
+            default: return 1;     // 默认值
+        }
+    }
+
     /// <summary>
     /// 手动触发重连（可以通过UI按钮调用）
     /// </summary>

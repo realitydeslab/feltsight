@@ -19234,6 +19234,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_HandTracker: {fileID: 1461729648}
+  m_ScreenSpaceProjector: {fileID: 385671793}
   m_HandToUse: 2
   m_VelocityText: {fileID: 817012953}
   m_SendInterval: 0.05

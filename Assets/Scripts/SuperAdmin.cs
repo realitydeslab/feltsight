@@ -13,6 +13,8 @@ public class SuperAdmin : MonoBehaviour
     [Header("Leave me alone")]
     public BLESendJointV Ble;
 
+    public GameObject AllUI;
+
     [Header("视觉相关配置")] 
     [Tooltip("是否显示实时的摄像头画面")]
     public bool isShowCameraImage = true;
@@ -115,6 +117,8 @@ public class SuperAdmin : MonoBehaviour
         
         superAdmin = this;
         DontDestroyOnLoad(gameObject);
+        
+        AllUI.SetActive(isDebug);
 
 #if UNITY_VISIONOS && !UNITY_EDITOR
         currentPlatform = PlatformType.VisionOS;

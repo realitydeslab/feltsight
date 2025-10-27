@@ -180,6 +180,7 @@ public class HandRaycaster : MonoBehaviour
     
     [Header("手部追踪")]
     [SerializeField] private MyHand handTracker;
+    [SerializeField]private ScreenSpaceProjector screenSpaceProjector;
     
     [Header("OneEuro 滤波器设置")]
     [SerializeField] private bool useFiltering = true;
@@ -201,9 +202,29 @@ public class HandRaycaster : MonoBehaviour
     [Header("颜色平滑设置")]
     [SerializeField] private float colorSmoothSpeed = 5.0f;
     
-    // 预定义的HDR颜色
-    private readonly Vector3 redHdrColor = new Vector3(1.304119f, 0.08193418f, 0.2414862f);
-    private readonly Vector3 blueHdrColor = new Vector3(0.4905663f, 8f, 4.499153f);
+    // 材质类型到HDR颜色的映射
+    private Dictionary<string, Vector3> materialColorMap = new Dictionary<string, Vector3>();
+    
+    // 各种材质类型的HDR颜色定义
+    private readonly Vector3 m1Color = new Vector3(1.0f, 0.98f, 0.41f);     // M1 金属 255,250,105
+    private readonly Vector3 m2Color = new Vector3(0.41f, 0.84f, 1.0f);     // M2 玻璃/陶瓷 104,215,255
+    private readonly Vector3 m3Color = new Vector3(0.67f, 0.64f, 1.0f);     // M3 硬塑 171,163,255
+    private readonly Vector3 m4Color = new Vector3(1.0f, 0.78f, 0.43f);     // M4 木材 255,200,109
+    private readonly Vector3 m5Color = new Vector3(0.95f, 0.95f, 0.91f);    // M5 石材/水泥 242,242,232
+    private readonly Vector3 m6Color = new Vector3(0.93f, 0.71f, 1.0f);     // M6 织物/毛皮 237,181,255
+    private readonly Vector3 m7Color = new Vector3(1.0f, 0.71f, 0.63f);     // M7 皮革/橡胶 255,182,161
+    private readonly Vector3 m8Color = new Vector3(0.88f, 1.0f, 0.74f);     // M8 纸/纸板 225,255,189
+    private readonly Vector3 m9Color = new Vector3(1.0f, 0.87f, 0.99f);     // M9 食物软组织 255,222,254
+    private readonly Vector3 m10Color = new Vector3(0.64f, 1.0f, 0.96f);    // M10 植被/土壤 163,255,244
+    private readonly Vector3 m11Color = new Vector3(0.64f, 0.77f, 1.0f);    // M11 电子玻璃面板 163,197,254
+    private readonly Vector3 m12Color = new Vector3(0.62f, 1.0f, 0.7f);     // M12 泡沫/海绵/复合 159,255,179
+    
+    // 默认材质颜色 (M5 - 石材/水泥)
+    private readonly Vector3 defaultMaterialColor = new Vector3(0.5f, 0.5f, 0.5f);
+    
+    // SuperAdmin引用
+    private SuperAdmin superAdmin;
+    
     
     // 手指关节ID定义
     private static readonly XRHandJointID[] TipJointIds = new[]
@@ -242,6 +263,30 @@ public class HandRaycaster : MonoBehaviour
         // 初始化滤波器容器
         filterContainer = new OneEuroFilter3DContainer(minCutoff, beta);
         
+        // 初始化材质颜色映射
+        InitializeMaterialColorMap();
+        
+        // 获取SuperAdmin引用
+        superAdmin = FindFirstObjectByType<SuperAdmin>();
+    }
+    
+    /// <summary>
+    /// 初始化材质类型到HDR颜色的映射
+    /// </summary>
+    private void InitializeMaterialColorMap()
+    {
+        materialColorMap["M1"] = m1Color;
+        materialColorMap["M2"] = m2Color;
+        materialColorMap["M3"] = m3Color;
+        materialColorMap["M4"] = m4Color;
+        materialColorMap["M5"] = m5Color;
+        materialColorMap["M6"] = m6Color;
+        materialColorMap["M7"] = m7Color;
+        materialColorMap["M8"] = m8Color;
+        materialColorMap["M9"] = m9Color;
+        materialColorMap["M10"] = m10Color;
+        materialColorMap["M11"] = m11Color;
+        materialColorMap["M12"] = m12Color;
     }
     
     void Update()
@@ -315,25 +360,11 @@ public class HandRaycaster : MonoBehaviour
                     vfx[index].SetFloat("BallRaidus",vv.ballRadius);
                     vfx[index].SetBool("isHit",true);
                     
-                    // 检查是否指向了YOLO识别的物体类别
-                    ScreenSpaceProjector projector = FindFirstObjectByType<ScreenSpaceProjector>();
                     
-                    // 目标颜色 - 默认为蓝色
-                    Vector3 targetColor = blueHdrColor;
-                    
-                    // 检查是否有YOLO分类
-                    if (projector != null)
-                    {
+                    // 目标颜色 - 默认为材质默认颜色
                         int arrayIndex = handedness == Handedness.Left ? fingerIndex : fingerIndex + 5;
-                        string fingerClass = projector.GetFingerClass(arrayIndex);
-                        
-                        // 设置目标颜色 - 有类别时为红色，没有类别时为蓝色
-                        if (fingerClass != null)
-                        {
-                            // 指向了YOLO识别的物体，设置为红色调
-                            targetColor = redHdrColor;
-                        }
-                    }
+                        var materialRef = screenSpaceProjector?.fingerMats?[arrayIndex];
+                    Vector3 targetColor = materialRef == null ? defaultMaterialColor : materialColorMap[materialRef] ;
                     
                     // 应用平滑过渡
                     string colorKey = $"{handName}_{fingerName}_color";
@@ -354,9 +385,9 @@ public class HandRaycaster : MonoBehaviour
                 {
                     lineRenderer.SetPosition(1, ray.origin+offset+rayDirection*vv.ballRadius);
                     vfx[index].SetBool("isHit",false);
-                    // 平滑过渡到蓝色
+                    // 平滑过渡到默认材质颜色
                     string colorKey = $"{handName}_{fingerName}_color";
-                    Vector3 smoothedColor = SmoothColor(colorKey, blueHdrColor);
+                    Vector3 smoothedColor = SmoothColor(colorKey, m5Color);
                     vfx[index].SetVector3("HitColor", smoothedColor);
                     // 移除之前的命中记录
                     if (lastHits.ContainsKey(rayKey))
@@ -495,46 +526,6 @@ public class HandRaycaster : MonoBehaviour
         string rayKey = $"{handName}_{fingerName}";
         
         return lastHits.TryGetValue(rayKey, out hit);
-    }
-    
-    /// <summary>
-    /// 获取所有当前命中信息
-    /// </summary>
-    public Dictionary<string, RaycastHit> GetAllHits()
-    {
-        return new Dictionary<string, RaycastHit>(lastHits);
-    }
-    
-    /// <summary>
-    /// 清除所有命中记录
-    /// </summary>
-    public void ClearAllHits()
-    {
-        lastHits.Clear();
-    }
-    
-    /// <summary>
-    /// 设置射线距离
-    /// </summary>
-    public void SetRayDistance(float distance)
-    {
-        rayDistance = Mathf.Max(0.1f, distance);
-    }
-    
-    /// <summary>
-    /// 设置射线遮罩
-    /// </summary>
-    public void SetRaycastMask(LayerMask mask)
-    {
-        raycastMask = mask;
-    }
-    
-    /// <summary>
-    /// 切换调试射线显示
-    /// </summary>
-    public void SetShowDebugRays(bool show)
-    {
-        showDebugRays = show;
     }
     
     /// <summary>

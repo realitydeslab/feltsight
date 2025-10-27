@@ -25,6 +25,7 @@ public class ScreenSpaceProjector : MonoBehaviour
     
     [Header("Finger Classification")]
     [SerializeField] public string[] fingerClasses = new string[10]; // 存储10个手指的类别信息 [左手拇指到小指, 右手拇指到小指]
+    [SerializeField] public string[] fingerMats = new string[10]; // 存储10个手指的类别信息 [左手拇指到小指, 右手拇指到小指]
     
     [Header("UI Display")]
     [SerializeField] private TextMeshProUGUI[] fingerClassTexts = new TextMeshProUGUI[10]; // UI文本控件数组，对应10个手指
@@ -69,67 +70,28 @@ public class ScreenSpaceProjector : MonoBehaviour
     /// </summary>
     private void ProcessAllFingerClasses()
     {
-        // 处理左手 (索引0-4)
-        for (int fingerIndex = 0; fingerIndex < 5; fingerIndex++)
+        for (int fingerIndex = 0; fingerIndex < 10; fingerIndex++)
         {
-            if (handRaycaster.TryGetFingerHit(Handedness.Left, fingerIndex, out RaycastHit hit))
+            fingerClasses[fingerIndex] = null;
+            fingerMats[fingerIndex] = null;
+            
+            // 计算手部和手指索引
+            Handedness handedness = fingerIndex < 5 ? Handedness.Left : Handedness.Right;
+            int handFingerIndex = fingerIndex < 5 ? fingerIndex : fingerIndex - 5;
+            
+            if (handRaycaster.TryGetFingerHit(handedness, handFingerIndex, out RaycastHit hit))
             {
                 Vector2 screenPoint = ProjectToScreenSpace(hit.point);
-                string classification = GetPointedObjectClass(screenPoint);
-                fingerClasses[fingerIndex] = classification;
-            }
-            else
-            {
-                fingerClasses[fingerIndex] = null;
-            }
-        }
-        
-        // 处理右手 (索引5-9)
-        for (int fingerIndex = 0; fingerIndex < 5; fingerIndex++)
-        {
-            if (handRaycaster.TryGetFingerHit(Handedness.Right, fingerIndex, out RaycastHit hit))
-            {
-                Vector2 screenPoint = ProjectToScreenSpace(hit.point);
-                string classification = GetPointedObjectClass(screenPoint);
-                fingerClasses[fingerIndex + 5] = classification;
-            }
-            else
-            {
-                fingerClasses[fingerIndex + 5] = null;
+                if (yoloMainCamera.GetClassificationAtPixel(screenPoint, out MainCamera.ClassificationResult result))
+                {
+                    fingerClasses[fingerIndex] = result.Label;
+                    fingerMats[fingerIndex] = result.MaterialType;
+                }
             }
         }
-        
-        // 为右手食指创建可视化球体 (保持原有功能)
-        ProcessRightIndexFingerVisualization();
         
         // 更新UI显示
         UpdateFingerClassUI();
-    }
-    
-    /// <summary>
-    /// 为右手食指创建可视化球体 (从原ProcessRightIndexFingerHit方法分离出来)
-    /// </summary>
-    private void ProcessRightIndexFingerVisualization()
-    {
-        if (handRaycaster.TryGetFingerHit(Handedness.Right, 1, out RaycastHit hit)) // Index finger = 1
-        {
-            Vector2 screenPoint = ProjectToScreenSpace(hit.point);
-            Vector3 mappedPosition = MapToReferenceTransformSpace(screenPoint);
-            CreateOrUpdateSphere(mappedPosition);
-            
-            if (SuperAdmin.superAdmin != null && SuperAdmin.superAdmin.showDebugInfo)
-            {
-                Debug.Log($"Right Index Hit: {hit.point}, Screen: {screenPoint}, Class: {GetFingerClass(6) ?? "None"}");
-            }
-        }
-        else
-        {
-            // Hide sphere if no hit (always reuse single sphere)
-            if (currentSphere != null)
-            {
-                currentSphere.SetActive(false);
-            }
-        }
     }
     
     /// <summary>
@@ -148,46 +110,14 @@ public class ScreenSpaceProjector : MonoBehaviour
             {
                 string fingerName = fingerNames[i];
                 string classification = fingerClasses[i];
+                string materialType = fingerMats[i];
                 string displayText = classification != null ? 
-                    $"{fingerName}: {classification}" : 
+                    $"{fingerName}: {classification} {materialType}" : 
                     $"{fingerName}: --";
                     
                 fingerClassTexts[i].text = displayText;
             }
         }
-    }
-    
-    /// <summary>
-    /// 根据屏幕坐标获取指向的物体类别
-    /// </summary>
-    /// <param name="screenPoint">屏幕坐标 (0-1范围)</param>
-    /// <returns>物体类别名称，如果没有指向任何检测物体则返回null</returns>
-    private string GetPointedObjectClass(Vector2 screenPoint)
-    {
-        if (yoloMainCamera == null) return null;
-        
-        // 使用MainCamera的GetClassificationAtPixel方法获取类别
-        return yoloMainCamera.GetClassificationAtPixel(screenPoint);
-    }
-    
-    /// <summary>
-    /// Calculates screen-space position a world space object. Useful for showing something on screen that is not visible in VR.
-    /// For example, it can be used to update the position of a marker that highlights the gaze of the player, using eye tracking.
-    /// </summary>
-    /// <param name="camera">The camera used for VR rendering.</param>
-    /// <param name="worldPos">World position of a point.</param>
-    /// <returns>Screen position of a point.</returns>
-    static Vector2 WorldToScreenVR(Camera camera, Vector3 worldPos)
-    {
-        Vector3 screenPoint = camera.WorldToViewportPoint(worldPos);
-        float w = XRSettings.eyeTextureWidth;
-        float h = XRSettings.eyeTextureHeight;
-        float ar = w / h;
-
-        screenPoint.x = (screenPoint.x - 0.15f * XRSettings.eyeTextureWidth) / 0.7f;
-        screenPoint.y = (screenPoint.y - 0.15f * XRSettings.eyeTextureHeight) / 0.7f;
-
-        return screenPoint;
     }
     
     /// <summary>
@@ -243,10 +173,10 @@ public class ScreenSpaceProjector : MonoBehaviour
             
             if (sphereMaterial != null)
             {
-                Renderer renderer = newSphere.GetComponent<Renderer>();
-                if (renderer != null)
+                Renderer sphereRenderer = newSphere.GetComponent<Renderer>();
+                if (sphereRenderer != null)
                 {
-                    renderer.material = sphereMaterial;
+                    sphereRenderer.material = sphereMaterial;
                 }
             }
             
@@ -270,30 +200,6 @@ public class ScreenSpaceProjector : MonoBehaviour
         originTransform.SetParent(transform);
         xAxisTransform.SetParent(transform);
         yAxisTransform.SetParent(transform);
-    }
-    
-
-    
-    /// <summary>
-    /// Public method to manually set reference transforms
-    /// </summary>
-    public void SetReferenceTransforms(Transform origin, Transform xAxis, Transform yAxis)
-    {
-        originTransform = origin;
-        xAxisTransform = xAxis;
-        yAxisTransform = yAxis;
-    }
-    
-    /// <summary>
-    /// Clear all created spheres (only single sphere since we always reuse)
-    /// </summary>
-    public void ClearSpheres()
-    {
-        if (currentSphere != null)
-        {
-            DestroyImmediate(currentSphere);
-            currentSphere = null;
-        }
     }
     
     // ========== 公共API方法 ==========
@@ -326,28 +232,6 @@ public class ScreenSpaceProjector : MonoBehaviour
     }
     
     /// <summary>
-    /// 获取左手所有手指的类别信息
-    /// </summary>
-    /// <returns>包含5个左手手指类别信息的数组 (拇指到小指)</returns>
-    public string[] GetLeftHandClasses()
-    {
-        string[] result = new string[5];
-        System.Array.Copy(fingerClasses, 0, result, 0, 5);
-        return result;
-    }
-    
-    /// <summary>
-    /// 获取右手所有手指的类别信息
-    /// </summary>
-    /// <returns>包含5个右手手指类别信息的数组 (拇指到小指)</returns>
-    public string[] GetRightHandClasses()
-    {
-        string[] result = new string[5];
-        System.Array.Copy(fingerClasses, 5, result, 0, 5);
-        return result;
-    }
-    
-    /// <summary>
     /// 获取指定手的指定手指类别信息
     /// </summary>
     /// <param name="handedness">手的类型 (Left/Right)</param>
@@ -367,37 +251,6 @@ public class ScreenSpaceProjector : MonoBehaviour
     
     // ========== UI管理方法 ==========
     
-    /// <summary>
-    /// 设置UI文本控件数组
-    /// </summary>
-    /// <param name="textComponents">TextMeshProUGUI控件数组，必须包含10个元素，对应10个手指</param>
-    public void SetFingerClassTextComponents(TextMeshProUGUI[] textComponents)
-    {
-        if (textComponents == null)
-        {
-            Debug.LogWarning("ScreenSpaceProjector: Text components array is null.");
-            return;
-        }
-        
-        if (textComponents.Length != 10)
-        {
-            Debug.LogWarning($"ScreenSpaceProjector: Text components array must contain exactly 10 elements, got {textComponents.Length}.");
-            return;
-        }
-        
-        fingerClassTexts = textComponents;
-        Debug.Log("ScreenSpaceProjector: Finger class text components updated successfully.");
-    }
-    
-    /// <summary>
-    /// 设置是否启用UI显示 (已弃用 - 现在由SuperAdmin统一控制)
-    /// </summary>
-    /// <param name="enable">是否启用UI显示</param>
-    [System.Obsolete("UI显示现在由SuperAdmin.cs中的 isShowHandRayHitClass && isShowYoloResult 控制")]
-    public void SetUIDisplayEnabled(bool enable)
-    {
-        Debug.LogWarning("SetUIDisplayEnabled is obsolete. UI display is now controlled by SuperAdmin.isShowHandRayHitClass && SuperAdmin.isShowYoloResult");
-    }
     
     /// <summary>
     /// 手动强制更新UI显示（通常由Update自动调用）

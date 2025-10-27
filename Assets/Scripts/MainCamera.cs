@@ -55,6 +55,9 @@ public class MainCamera : MonoBehaviour
     private RenderTexture tempRT; // Double buffering
     private Tensor<float> centersToCorners;
     
+    // 材质类型映射
+    private Dictionary<int, string> materialTypeMap = new Dictionary<int, string>();
+    
     // 推理状态控制
     private float lastInferenceTime;
     private bool isInferenceRunning = false;
@@ -84,6 +87,7 @@ public class MainCamera : MonoBehaviour
         public string Label;
         public float Confidence;
         public int ClassID;
+        public string MaterialType; // M1-M12 material type identifier
     }
 
     [Header("Performance Settings")]
@@ -116,6 +120,9 @@ public class MainCamera : MonoBehaviour
         {
             labels = classesAsset.text.Split('\n');
         }
+        
+        // 初始化材质类型映射
+        InitializeMaterialTypeMap();
         
         // 加载模型
         LoadModel();
@@ -179,6 +186,80 @@ public class MainCamera : MonoBehaviour
     void OnDisable()
     {
         StopCameraProcessing();
+    }
+    
+    /// <summary>
+    /// 初始化材质类型映射，根据物品-材质对应关系
+    /// </summary>
+    private void InitializeMaterialTypeMap()
+    {
+        // M1 金属（喷漆/不锈钢/铝）
+        int[] m1Classes = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 42, 43, 44, 63, 68, 69, 70, 71, 72, 76 };
+        foreach (int id in m1Classes)
+        {
+            materialTypeMap[id] = "M1";
+        }
+        
+        // M2 玻璃/陶瓷（器物/釉面）
+        int[] m2Classes = { 40, 41, 45, 61, 75 };
+        foreach (int id in m2Classes)
+        {
+            materialTypeMap[id] = "M2";
+        }
+        
+        // M3 硬塑（ABS/PC/PP）
+        int[] m3Classes = { 29, 30, 31, 38, 39, 64, 65, 66, 74, 78, 79 };
+        foreach (int id in m3Classes)
+        {
+            materialTypeMap[id] = "M3";
+        }
+        
+        // M4 木材
+        int[] m4Classes = { 13, 34, 36, 56, 60 };
+        foreach (int id in m4Classes)
+        {
+            materialTypeMap[id] = "M4";
+        }
+        
+        // M6 织物/毛皮（含毛绒，也作动物/人体的安全代理）
+        int[] m6Classes = { 0, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 33, 57, 59, 77 };
+        foreach (int id in m6Classes)
+        {
+            materialTypeMap[id] = "M6";
+        }
+        
+        // M7 皮革/橡胶
+        int[] m7Classes = { 32, 35 };
+        foreach (int id in m7Classes)
+        {
+            materialTypeMap[id] = "M7";
+        }
+        
+        // M8 纸/纸板
+        materialTypeMap[73] = "M8";
+        
+        // M9 食物软组织
+        int[] m9Classes = { 46, 47, 48, 49, 50, 51, 52, 53, 54, 55 };
+        foreach (int id in m9Classes)
+        {
+            materialTypeMap[id] = "M9";
+        }
+        
+        // M10 植被/土壤
+        materialTypeMap[58] = "M10";
+        
+        // M11 电子玻璃面板（镶膜玻璃/屏幕）
+        int[] m11Classes = { 62, 67 };
+        foreach (int id in m11Classes)
+        {
+            materialTypeMap[id] = "M11";
+        }
+        
+        // M12 泡沫/海绵/复合（以泡沫触感为主）
+        materialTypeMap[37] = "M12";
+        
+        // M5 石材/水泥所有其他识别不出来的东西（默认值）
+        Debug.Log($"MaterialTypeMap initialized with {materialTypeMap.Count} entries");
     }
     
     void InitializeUI()
@@ -429,15 +510,25 @@ public class MainCamera : MonoBehaviour
             {
                 if (labelIDs[n] >= labels.Length) continue;
                 
+                int classId = labelIDs[n];
+                string materialType = "M5"; // 默认为 M5 (石材/水泥)
+                
+                // 从映射中获取材质类型
+                if (materialTypeMap.ContainsKey(classId))
+                {
+                    materialType = materialTypeMap[classId];
+                }
+                
                 var result = new ClassificationResult
                 {
                     CenterX = coords[n, 0],
                     CenterY = coords[n, 1],
                     Width = coords[n, 2],
                     Height = coords[n, 3],
-                    Label = labels[labelIDs[n]],
+                    Label = labels[classId],
                     Confidence = scores[n],
-                    ClassID = labelIDs[n]
+                    ClassID = classId,
+                    MaterialType = materialType
                 };
                 
                 currentResults.Add(result);
@@ -631,17 +722,16 @@ public class MainCamera : MonoBehaviour
     }
     
     // 公共方法：根据像素坐标获取类别
-    public string GetClassificationAtPixel(Vector2 pixelCoord)
+    public bool GetClassificationAtPixel(Vector2 pixelCoord, out ClassificationResult queryresult)
     {
-        return GetClassificationAtPixel(pixelCoord.x, pixelCoord.y);
+        return GetClassificationAtPixel(pixelCoord.x, pixelCoord.y, out queryresult);
     }
     
-    public string GetClassificationAtPixel(float x, float y)
+    public bool GetClassificationAtPixel(float x, float y, out ClassificationResult queryresult)
     {
+        y = 1.0f - y;
         lock (resultsLock)
         {
-            x*= imageWidth;
-            y*= imageHeight;
             foreach (var result in currentResults)
             {
                 if (enableYoloDebugLogs)
@@ -657,12 +747,13 @@ public class MainCamera : MonoBehaviour
                 if (x >= left && x <= right &&
                     y >= top && y <= bottom)
                 {
-                    return result.Label;
+                    queryresult = result;
+                    return true;
                 }
             }
-        }
-        
-        return null; // 未找到类别
+        } 
+        queryresult = default;
+        return false; // 未找到类别
     }
     
     // 获取所有当前的分类结果

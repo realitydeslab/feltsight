@@ -2511,6 +2511,7 @@ MonoBehaviour:
   - {fileID: 1384784960}
   vv: {fileID: 678674675}
   handTracker: {fileID: 1461729648}
+  screenSpaceProjector: {fileID: 385671793}
   useFiltering: 1
   minCutoff: 0.7
   beta: 0.1
@@ -2540,6 +2541,17 @@ MonoBehaviour:
   sphereSize: 0.1
   sphereMaterial: {fileID: 2100000, guid: ab1e501408f784696a373918622592b2, type: 2}
   fingerClasses:
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  fingerMats:
   - 
   - 
   - 
@@ -23137,14 +23149,14 @@ MonoBehaviour:
   - {fileID: 2095722702}
   - {fileID: 1932541896}
   righthandShiZhiRayHitIndicator: {fileID: 1648657920}
-  showDebugInfo: 0
+  showDebugInfo: 1
   yoloModelAsset: {fileID: 5022602860645237092, guid: 62066370d31434bad987e9e5e87f0486, type: 3}
   modelInputWidth: 640
   modelInputHeight: 640
   iouThreshold: 0.4
   scoreThreshold: 0.4
   inferenceInterval: 0.535
-  enableYoloDebugLogs: 1
+  enableYoloDebugLogs: 0
   isEnableBLE: 1
   showBLEDebugInfo: 0
   currentPlatform: 0

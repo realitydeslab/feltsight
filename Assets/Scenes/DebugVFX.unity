@@ -2455,7 +2455,7 @@ MonoBehaviour:
   vv: {fileID: 678674675}
   handTracker: {fileID: 1461729648}
   screenSpaceProjector: {fileID: 385671793}
-  useTestColors: 1
+  useTestColors: 0
   useFiltering: 1
   minCutoff: 0.7
   beta: 0.1

@@ -300,7 +300,7 @@ public class HandRaycaster : MonoBehaviour
                 // 执行射线检测
                 var offset = Vector3.zero;
                 lineRenderer.SetPosition(0, ray.origin + offset);
-                if (Physics.Raycast(ray, out var hit, vv.ballRadius, raycastMask))
+                if (Physics.Raycast(ray, out var hit, vv.ballRadius+0.2f, raycastMask))
                 {
                     // 存储命中信息
                     lastHits[rayKey] = hit;

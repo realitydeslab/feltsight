@@ -21,8 +21,8 @@ public class BLESendJointV : MonoBehaviour
     [SerializeField] [Tooltip("ScreenSpaceProjector组件引用")]
     private ScreenSpaceProjector m_ScreenSpaceProjector;
 
-    [SerializeField] [Tooltip("要使用的手（左手或右手）")]
-    private Handedness m_HandToUse = Handedness.Right;
+    [SerializeField] [Tooltip("HandRaycaster组件引用")]
+    private HandRaycaster m_HandRaycaster;
 
     [SerializeField] [Tooltip("用于显示手指速度的文本组件")]
     private Text m_VelocityText;
@@ -94,6 +94,11 @@ public class BLESendJointV : MonoBehaviour
     private byte m_CurrentVolume = 75; // 当前音量
     private float m_VelocityMultiplier = 1.0f; // 速度倍率
     
+    // 每个手指的音量和速度控制
+    private byte[] m_FingerVolumes = new byte[10]; // 每个手指的音量(0-100)
+    private byte[] m_FingerSpeeds = new byte[10];  // 每个手指的速度(10-40)
+    private float[] m_FingerVelocityMagnitudes = new float[10]; // 每个手指的速度大小
+    
     // 连接状态管理
     private bool m_IsConnecting = false;
     private bool m_IsReconnecting = false;
@@ -137,6 +142,14 @@ public class BLESendJointV : MonoBehaviour
             m_TargetDeviceNames = new string[] { "ESP32-BLE", "FeltSight BLE" };
         }
 
+        // 初始化每个手指的数组
+        for (int i = 0; i < 10; i++)
+        {
+            m_FingerVolumes[i] = m_NormalVolume;
+            m_FingerSpeeds[i] = m_CurrentSpeedByte;
+            m_FingerVelocityMagnitudes[i] = 0f;
+        }
+
         // 初始化OneDollar滤波器
         InitializeFilters();
 
@@ -162,6 +175,15 @@ public class BLESendJointV : MonoBehaviour
             }
         }
         
+        // 初始化HandRaycaster引用
+        if (m_HandRaycaster == null)
+        {
+            m_HandRaycaster = FindFirstObjectByType<HandRaycaster>();
+            if (m_HandRaycaster == null)
+            {
+                Debug.LogWarning("HandRaycaster component not found, hit detection will not be available");
+            }
+        }
         
 
         // 初始化BLE
@@ -173,8 +195,11 @@ public class BLESendJointV : MonoBehaviour
 
     void Update()
     {
-        // 更新食指尖速度并映射到速度值
-        UpdateFingerVelocityAndSpeed();
+        // 更新所有手指的速度和音量
+        UpdateAllFingersVelocityAndVolume();
+        
+        // 更新食指尖速度信息用于UI显示
+        UpdateVelocityText(m_FilteredMagnitude);
         
         // 检查连接状态
         CheckConnectionStatus();
@@ -511,77 +536,96 @@ public class BLESendJointV : MonoBehaviour
             yield return new WaitForSeconds(0.5f);
         }
     }
-
+    
     /// <summary>
-    /// 更新食指尖速度并映射到速度值
+    /// 更新所有手指的速度和音量
     /// </summary>
-    private void UpdateFingerVelocityAndSpeed()
+    private void UpdateAllFingersVelocityAndVolume()
     {
-        Vector3 rawVelocity = Vector3.zero;
-        float velocityMagnitude = 0f;
+       
 
-        #if UNITY_EDITOR
-        // 在编辑器中使用模拟值进行测试
-        rawVelocity = new Vector3(m_SimulatedVelocity, 0, 0);
-        #else
-        // 获取食指尖速度
-        if (m_HandTracker.TryGetJointPositionAndVelocity(
-            m_HandToUse, XRHandJointID.IndexTip, out Vector3 position, out Vector3 velocity))
+        // 手指关节ID数组
+        XRHandJointID[] fingerJoints = {
+            XRHandJointID.ThumbTip,
+            XRHandJointID.IndexTip,
+            XRHandJointID.MiddleTip,
+            XRHandJointID.RingTip,
+            XRHandJointID.LittleTip
+        };
+
+        // 为每个手指计算速度和音量（这里简化处理，实际可能需要更复杂的逻辑）
+        for (int i = 0; i < 10; i++)
         {
-            rawVelocity = velocity;
+            // 对于前5个通道使用右手，后5个通道使用左手
+            Handedness handToUse = (i < 5) ? Handedness.Right : Handedness.Left;
+            int jointIndex = i % 5;
+            
+            if (jointIndex < fingerJoints.Length)
+            {
+                Vector3 fingerRawVelocity = Vector3.zero;
+                
+                #if UNITY_EDITOR
+                // 在编辑器中使用模拟值进行测试
+                fingerRawVelocity = new Vector3(m_SimulatedVelocity, 0, 0);
+                #else
+                // 获取手指尖速度
+                if (m_HandTracker.TryGetJointPositionAndVelocity(
+                    handToUse, fingerJoints[jointIndex], out Vector3 position, out Vector3 velocity))
+                {
+                    fingerRawVelocity = velocity;
+                }
+                #endif
+
+                float fingerVelocityMagnitude = fingerRawVelocity.magnitude;
+                m_FingerVelocityMagnitudes[i] = fingerVelocityMagnitude;
+                
+                // 应用滤波
+                if (m_EnableVelocityFilter && m_VelocityFilter != null)
+                {
+                    fingerRawVelocity = m_VelocityFilter.Filter(fingerRawVelocity);
+                    fingerVelocityMagnitude = fingerRawVelocity.magnitude;
+                }
+                
+                // 应用速度大小滤波
+                if (m_EnableMagnitudeFilter && m_MagnitudeFilter != null)
+                {
+                    fingerVelocityMagnitude = m_MagnitudeFilter.Filter(fingerVelocityMagnitude);
+                }
+
+                // 应用倍率
+                fingerVelocityMagnitude = fingerVelocityMagnitude * m_VelocityMultiplier;
+
+                // 计算音量
+                byte volume = m_NormalVolume;
+                
+                // 检查手指是否击中物体，如果没有击中则静音
+                bool isFingerHit = false;
+                if (m_HandRaycaster != null)
+                {
+                    Handedness handToUse2 = (i < 5) ? Handedness.Right : Handedness.Left;
+                    int fingerIndex = i % 5;
+                    RaycastHit hit;
+                    isFingerHit = m_HandRaycaster.TryGetFingerHit(handToUse2, fingerIndex, out hit);
+                }
+                
+                // 如果手指没有击中物体，或者速度低于阈值，则静音
+                if (!isFingerHit || fingerVelocityMagnitude < m_VolumeThreshold)
+                {
+                    volume = 0; // 没有击中或速度低于阈值时静音
+                }
+                
+                // 保存每个手指的音量
+                m_FingerVolumes[i] = volume;
+
+                // 将速度映射到1.0x-4.0x范围 (10-40)
+                float clampedSpeed = Mathf.Clamp(fingerVelocityMagnitude, m_MinVelocityThreshold, m_MaxVelocityThreshold);
+                float normalizedSpeedFinger = Mathf.InverseLerp(m_MinVelocityThreshold, m_MaxVelocityThreshold, clampedSpeed);
+                int speedByteValue = Mathf.RoundToInt(Mathf.Lerp(MIN_SPEED_BYTE, MAX_SPEED_BYTE, normalizedSpeedFinger));
+                
+                // 保存每个手指的速度
+                m_FingerSpeeds[i] = (byte)speedByteValue;
+            }
         }
-        #endif
-
-        // 保存原始数据用于显示
-        m_RawVelocity = rawVelocity;
-        m_RawMagnitude = rawVelocity.magnitude;
-        
-        float volumeThreshold = m_VolumeThreshold;
-        
-        if (m_RawMagnitude < volumeThreshold)
-        {
-            m_CurrentVolume = 0; // 原始速度低于阈值时静音
-        }
-
-        // 应用OneDollar滤波
-        Vector3 filteredVelocity = rawVelocity;
-        if (m_EnableVelocityFilter && m_VelocityFilter != null)
-        {
-            filteredVelocity = m_VelocityFilter.Filter(rawVelocity);
-        }
-
-        // 计算滤波后的速度大小
-        float filteredMagnitude = filteredVelocity.magnitude;
-        
-        // 应用速度大小滤波，滤波器状态由外部通过SetMagnitudeFilterEnabled方法设置
-        if (m_EnableMagnitudeFilter && m_MagnitudeFilter != null)
-        {
-            filteredMagnitude = m_MagnitudeFilter.Filter(filteredMagnitude);
-        }
-
-        // 保存滤波后的数据用于显示
-        m_FilteredVelocity = filteredVelocity;
-        m_FilteredMagnitude = filteredMagnitude;
-
-        // 使用当前倍率值，该值由外部通过SetVelocityMultiplier方法设置
-        // 如果没有设置，默认为1.0f (在类初始化时已设置)
-
-        // 确保倍率不为负数或零
-        m_VelocityMultiplier = Mathf.Max(0.1f, m_VelocityMultiplier);
-
-        // 应用倍率到滤波后的速度
-        velocityMagnitude = filteredMagnitude * m_VelocityMultiplier;
-
-        // 将速度映射到1.0x-4.0x范围 (10-40)
-        m_CurrentSpeed = Mathf.Clamp(velocityMagnitude, m_MinVelocityThreshold, m_MaxVelocityThreshold);
-        float normalizedSpeed = Mathf.InverseLerp(m_MinVelocityThreshold, m_MaxVelocityThreshold, m_CurrentSpeed);
-
-        // 将归一化的速度值(0-1)转换为整数值(10-40)
-        int speedValue = Mathf.RoundToInt(Mathf.Lerp(MIN_SPEED_BYTE, MAX_SPEED_BYTE, normalizedSpeed));
-        m_CurrentSpeedByte = (byte)speedValue;
-
-        // 更新UI显示
-        UpdateVelocityText(velocityMagnitude);
     }
 
     /// <summary>
@@ -635,9 +679,6 @@ public class BLESendJointV : MonoBehaviour
         {
             try
             {
-                // 每次发送前更新速度
-                UpdateFingerVelocityAndSpeed();
-
                 if (m_Characteristic != null)
                 {
                     byte[] data = GenerateData(counter);
@@ -682,19 +723,6 @@ public class BLESendJointV : MonoBehaviour
         // 起始标记
         data[0] = 0xFE;
 
-        // 应用倍率影响到最终速度值
-        float basePlaybackRate = m_CurrentSpeedByte / 10f; // 原始映射速率（1.0x-4.0x）
-        float adjustedRate = basePlaybackRate;
-
-        // 应用当前倍率 (由外部通过SetVelocityMultiplier方法设置)
-        adjustedRate = adjustedRate * m_VelocityMultiplier;
-
-        // 确保在有效范围内
-        adjustedRate = Mathf.Clamp(adjustedRate, 1.0f, 4.0f);
-
-        // 转换回字节值
-        byte finalSpeedByte = (byte)Mathf.RoundToInt(adjustedRate * 10);
-
         // 生成10个通道的数据
         for (int channel = 0; channel < 10; channel++)
         {
@@ -707,13 +735,19 @@ public class BLESendJointV : MonoBehaviour
                 string materialType = m_ScreenSpaceProjector.fingerMats[channel];
                 fileIndex = MapMaterialToIndex(materialType);
             }
-            data[offset] = fileIndex;
+            // TODO 这里由于相机有问题所以文件全部都用第五个
+            data[offset] = 5;
+            // data[offset] = fileIndex;
 
-            // 音量：根据原始速度决定是否静音
-            data[offset + 1] = m_CurrentVolume;
+            // 获取当前手指的速度和音量
+            byte fingerVolume = GetFingerVolume(channel);
+            byte fingerSpeed = GetFingerSpeed(channel);
 
-            // 速度：使用应用了倍率后的速度值
-            data[offset + 2] = finalSpeedByte;
+            // 音量：使用每个手指单独的音量值
+            data[offset + 1] = fingerVolume;
+
+            // 速度：使用每个手指单独的速度值
+            data[offset + 2] = fingerSpeed;
         }
 
         // 结束标记
@@ -873,6 +907,9 @@ public class BLESendJointV : MonoBehaviour
                 Debug.LogWarning($"Error occurred while updating velocity UI: {e.Message}");
             }
         }
+        
+        // 同时更新连接状态文本中的手指信息
+        UpdateFingerInfoText();
     }
     
     /// <summary>
@@ -884,29 +921,62 @@ public class BLESendJointV : MonoBehaviour
         {
             try
             {
-                m_ConnectionStatusText.text = "BLE status: " +status;
+                m_ConnectionStatusText.text = "BLE status: " + status;
                 
-                // 根据状态设置颜色
-                if (status.Contains("Connected and Ready"))
-                {
-                    m_ConnectionStatusText.color = Color.green;
-                }
-                else if (status.Contains("Connecting") || status.Contains("Scanning") || status.Contains("Reconnecting"))
-                {
-                    m_ConnectionStatusText.color = Color.yellow;
-                }
-                else if (status.Contains("Lost") || status.Contains("Failed") || status.Contains("Error"))
-                {
-                    m_ConnectionStatusText.color = Color.red;
-                }
-                else
-                {
-                    m_ConnectionStatusText.color = Color.white;
-                }
+                // // 根据状态设置颜色
+                // if (status.Contains("Connected and Ready"))
+                // {
+                //     m_ConnectionStatusText.color = Color.green;
+                // }
+                // else if (status.Contains("Connecting") || status.Contains("Scanning") || status.Contains("Reconnecting"))
+                // {
+                //     m_ConnectionStatusText.color = Color.yellow;
+                // }
+                // else if (status.Contains("Lost") || status.Contains("Failed") || status.Contains("Error"))
+                // {
+                //     m_ConnectionStatusText.color = Color.red;
+                // }
+                // else
+                // {
+                //     m_ConnectionStatusText.color = Color.white;
+                // }
             }
             catch (System.Exception e)
             {
                 Debug.LogWarning($"Error updating connection status UI: {e.Message}");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// 更新手指信息文本
+    /// </summary>
+    private void UpdateFingerInfoText()
+    {
+        if (m_ConnectionStatusText != null)
+        {
+            try
+            {
+                // 构建每个手指的信息
+                string fingerInfo = "\nFingers Status:";
+                string[] fingerNames = {"Thumb", "Index", "Middle", "Ring", "Little"};
+                
+                for (int i = 0; i < 10; i++)
+                {
+                    int handIndex = i / 5;  // 0 for right hand, 1 for left hand
+                    int fingerIndex = i % 5;
+                    string handName = handIndex == 0 ? "R" : "L";
+                    
+                    fingerInfo += $"\n{handName}-{fingerNames[fingerIndex]}: V={m_FingerVelocityMagnitudes[i]:F3}m/s, Vol={m_FingerVolumes[i]}%, Speed={m_FingerSpeeds[i] / 10f:F1}x";
+                }
+                
+                // 添加到现有文本后面
+                m_ConnectionStatusText.text = fingerInfo;
+                // m_ConnectionStatusText.color = new Color(4,145,255,255);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"Error updating finger info text: {e.Message}");
             }
         }
     }
@@ -921,9 +991,6 @@ public class BLESendJointV : MonoBehaviour
     {
         // 确保倍率在合理范围内
         m_VelocityMultiplier = Mathf.Clamp(multiplier, 0.1f, 10.0f);
-        
-        // 立即更新速度显示
-        UpdateFingerVelocityAndSpeed();
         
         // 计算实际会传输的速度值
         float basePlaybackRate = m_CurrentSpeedByte / 10f; // 原始映射速率（1.0x-4.0x）
@@ -1076,6 +1143,77 @@ public class BLESendJointV : MonoBehaviour
             case "M11": return 11; // 电子玻璃面板
             case "M12": return 12; // 泡沫/海绵/复合
             default: return 1;     // 默认值
+        }
+    }
+
+    /// <summary>
+    /// 获取指定手指的音量
+    /// </summary>
+    /// <param name="fingerIndex">手指索引(0-9)</param>
+    /// <returns>音量值(0-100)</returns>
+    private byte GetFingerVolume(int fingerIndex)
+    {
+        if (fingerIndex < 0 || fingerIndex >= 10)
+            return 0;
+        
+        // 如果还没有初始化，则使用全局音量
+        if (m_FingerVolumes[fingerIndex] == 0 && m_CurrentVolume > 0)
+            return m_CurrentVolume;
+            
+        return m_FingerVolumes[fingerIndex];
+    }
+
+    /// <summary>
+    /// 获取指定手指的速度
+    /// </summary>
+    /// <param name="fingerIndex">手指索引(0-9)</param>
+    /// <returns>速度值(10-40)</returns>
+    private byte GetFingerSpeed(int fingerIndex)
+    {
+        if (fingerIndex < 0 || fingerIndex >= 10)
+            return 10; // 默认最小速度
+        
+        // 如果还没有初始化，则使用全局速度
+        if (m_FingerSpeeds[fingerIndex] == 0 && m_CurrentSpeedByte > 0)
+            return m_CurrentSpeedByte;
+            
+        // 确保速度在有效范围内
+        return (byte)Mathf.Clamp(m_FingerSpeeds[fingerIndex], MIN_SPEED_BYTE, MAX_SPEED_BYTE);
+    }
+
+    /// <summary>
+    /// 设置指定手指的音量
+    /// </summary>
+    /// <param name="fingerIndex">手指索引(0-9)</param>
+    /// <param name="volume">音量值(0-100)</param>
+    public void SetFingerVolume(int fingerIndex, byte volume)
+    {
+        if (fingerIndex < 0 || fingerIndex >= 10)
+            return;
+            
+        m_FingerVolumes[fingerIndex] = (byte)Mathf.Clamp(volume, 0, 100);
+        
+        if (ShouldShowDebugInfo())
+        {
+            Debug.Log($"Finger {fingerIndex} volume set to: {m_FingerVolumes[fingerIndex]}");
+        }
+    }
+
+    /// <summary>
+    /// 设置指定手指的速度
+    /// </summary>
+    /// <param name="fingerIndex">手指索引(0-9)</param>
+    /// <param name="speed">速度值(10-40)</param>
+    public void SetFingerSpeed(int fingerIndex, byte speed)
+    {
+        if (fingerIndex < 0 || fingerIndex >= 10)
+            return;
+            
+        m_FingerSpeeds[fingerIndex] = (byte)Mathf.Clamp(speed, MIN_SPEED_BYTE, MAX_SPEED_BYTE);
+        
+        if (ShouldShowDebugInfo())
+        {
+            Debug.Log($"Finger {fingerIndex} speed set to: {m_FingerSpeeds[fingerIndex]} ({m_FingerSpeeds[fingerIndex] / 10f:F1}x)");
         }
     }
 

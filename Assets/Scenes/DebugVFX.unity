@@ -13435,7 +13435,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 0, y: 0}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 51}
+  m_SizeDelta: {x: 0, y: 700}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &463939313
 MonoBehaviour:
@@ -13450,7 +13450,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.19607843, g: 0.19607843, b: 0.19607843, a: 1}
+  m_Color: {r: 0.015686275, g: 0.5686275, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -19205,13 +19205,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_HandTracker: {fileID: 1461729648}
   m_ScreenSpaceProjector: {fileID: 385671793}
-  m_HandToUse: 2
+  m_HandRaycaster: {fileID: 385671792}
   m_VelocityText: {fileID: 817012953}
   m_SendInterval: 0.05
   m_MinVelocityThreshold: 0.015
   m_MaxVelocityThreshold: 1.3
   m_VolumeThreshold: 0.1
-  m_NormalVolume: 75
+  m_NormalVolume: 90
   m_SimulatedVelocity: 0.15
   m_EnableVelocityFilter: 1
   m_VelocityFilter: {fileID: 2054631609}
@@ -22649,7 +22649,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c11a0bee6bdc74b4a86f38318485015a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  isDebug: 1
+  isDebug: 0
   isEnableVFX: 1
   Ble: {fileID: 1461729647}
   AllUI: {fileID: 1092308375}

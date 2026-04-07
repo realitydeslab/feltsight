@@ -54,6 +54,13 @@ public class VFXMan : MonoBehaviour
     private float nextMergeUpdateTime;
     private MeshFilter combinedMeshFilter;
 
+    void Awake()
+    {
+        // 确保字典已初始化
+        if (vfxMap == null)
+            vfxMap = new Dictionary<MeshFilter, VisualEffect>();
+    }
+
     void Start()
     {
         if (viewCamera == null)
@@ -253,7 +260,7 @@ public class VFXMan : MonoBehaviour
 
         if (nearbyMeshes.Count == 0)
         {
-            Debug.Log("No nearby meshes found");
+            // Debug.Log("No nearby meshes found");
             return;
         }
 
@@ -356,8 +363,28 @@ public class VFXMan : MonoBehaviour
         UpdateAllMeshMaterialsTargetDistance();
     }
 
+    private void OnEnable()
+    {
+        // 确保在启用时vfxMap已初始化
+        if (vfxMap == null)
+            vfxMap = new Dictionary<MeshFilter, VisualEffect>();
+    }
+
     private void OnDisable()
     {
+        // 在编辑器中确保正确清理VFX组件
+        if (!Application.isPlaying)
+        {
+            foreach (var kv in vfxMap.ToList())
+            {
+                if (kv.Value != null)
+                {
+                    kv.Value.Stop();
+                    kv.Value.enabled = false;
+                }
+            }
+        }
+        
         CleanupAllVFX();
     }
 
@@ -375,6 +402,11 @@ public class VFXMan : MonoBehaviour
         {
             // 停止VFX并禁用组件
             vfx.Stop();
+            
+            // 重要：在销毁前重置所有VFX参数以清理内部状态
+            vfx.Reinit();
+            
+            // 禁用组件
             vfx.enabled = false;
 
             // 在运行时使用Destroy，在编辑器中使用DestroyImmediate

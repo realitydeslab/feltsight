@@ -4,6 +4,7 @@ using System.Collections;
 using TMPro;
 using UnityEngine.UI;
 using UnityEngine.XR.Hands;
+using System;
 
 /// <summary>
 /// 使用食指尖速度来控制BLE发送的速度参数
@@ -17,14 +18,12 @@ public class BLESendJointV : MonoBehaviour
     [SerializeField] [Tooltip("要使用的手部追踪组件")]
     private MyHand m_HandTracker;
 
-    [SerializeField] [Tooltip("要使用的手（左手或右手）")]
-    private Handedness m_HandToUse = Handedness.Right;
+    [SerializeField] [Tooltip("HandRaycaster组件引用")]
+    private HandRaycaster m_HandRaycaster;
 
     [SerializeField] [Tooltip("用于显示手指速度的文本组件")]
     private Text m_VelocityText;
-
-    [SerializeField] [Tooltip("用于调整速度倍率的Slider")]
-    private UnityEngine.UI.Slider m_VelocitySlider;
+    
 
     [SerializeField] [Tooltip("发送数据的间隔时间（秒）")]
     private float m_SendInterval = 0.5f;
@@ -40,10 +39,7 @@ public class BLESendJointV : MonoBehaviour
 
     [SerializeField] [Tooltip("正常播放时的音量（0-100）")]
     private byte m_NormalVolume = 75;
-
-    [SerializeField] [Tooltip("是否在控制台显示调试信息")]
-    private bool m_ShowDebugInfo = true;
-
+    
     [SerializeField] [Tooltip("在编辑器中模拟速度值（仅供测试）")]
     private float m_SimulatedVelocity = 0.15f;
 
@@ -65,9 +61,6 @@ public class BLESendJointV : MonoBehaviour
     [SerializeField] [Tooltip("速度大小滤波强度 (0.01-1.0)，值越小滤波效果越强")]
     [Range(0.01f, 1.0f)]
     private float m_MagnitudeFilterStrength = 0.15f;
-
-    [SerializeField] [Tooltip("用于调整速度滤波强度的Slider")]
-    private UnityEngine.UI.Slider m_FilterStrengthSlider;
 
     [Header("蓝牙连接设置")]
     [SerializeField] [Tooltip("蓝牙设备名称，多个名称用逗号分隔")]
@@ -98,6 +91,11 @@ public class BLESendJointV : MonoBehaviour
     private byte m_CurrentVolume = 75; // 当前音量
     private float m_VelocityMultiplier = 1.0f; // 速度倍率
     
+    // 每个手指的音量和速度控制
+    private byte[] m_FingerVolumes = new byte[10]; // 每个手指的音量(0-100)
+    private byte[] m_FingerSpeeds = new byte[10];  // 每个手指的速度(10-40)
+    private float[] m_FingerVelocityMagnitudes = new float[10]; // 每个手指的速度大小
+    
     // 连接状态管理
     private bool m_IsConnecting = false;
     private bool m_IsReconnecting = false;
@@ -114,6 +112,12 @@ public class BLESendJointV : MonoBehaviour
     private float m_RawMagnitude = 0f;
     private Vector3 m_FilteredVelocity = Vector3.zero;
     private float m_FilteredMagnitude = 0f;
+    
+    // 检查是否应该显示调试信息
+    private bool ShouldShowDebugInfo()
+    {
+        return SuperAdmin.superAdmin != null ? SuperAdmin.superAdmin.showBLEDebugInfo : false;
+    }
 
     // 最小速度和最大速度的字节值
     private const byte MIN_SPEED_BYTE = 10; // 1.0x
@@ -135,6 +139,14 @@ public class BLESendJointV : MonoBehaviour
             m_TargetDeviceNames = new string[] { "ESP32-BLE", "FeltSight BLE" };
         }
 
+        // 初始化每个手指的数组
+        for (int i = 0; i < 10; i++)
+        {
+            m_FingerVolumes[i] = m_NormalVolume;
+            m_FingerSpeeds[i] = m_CurrentSpeedByte;
+            m_FingerVelocityMagnitudes[i] = 0f;
+        }
+
         // 初始化OneDollar滤波器
         InitializeFilters();
 
@@ -149,30 +161,32 @@ public class BLESendJointV : MonoBehaviour
                 return;
             }
         }
-
-        // 注册Slider事件（如果已分配）
-        if (m_VelocitySlider != null)
+        
+        // 初始化HandRaycaster引用
+        if (m_HandRaycaster == null)
         {
-            m_VelocitySlider.onValueChanged.AddListener(OnVelocitySliderChanged);
+            m_HandRaycaster = FindFirstObjectByType<HandRaycaster>();
+            if (m_HandRaycaster == null)
+            {
+                Debug.LogWarning("HandRaycaster component not found, hit detection will not be available");
+            }
         }
-
-        if (m_FilterStrengthSlider != null)
-        {
-            m_FilterStrengthSlider.value = m_VelocityFilterStrength;
-            m_FilterStrengthSlider.onValueChanged.AddListener(OnFilterStrengthSliderChanged);
-        }
+        
 
         // 初始化BLE
         InitializeBLE();
         
         // 更新连接状态UI
-        UpdateConnectionStatusUI("初始化中...");
+        UpdateConnectionStatusUI("Initializing...");
     }
 
     void Update()
     {
-        // 更新食指尖速度并映射到速度值
-        UpdateFingerVelocityAndSpeed();
+        // 更新所有手指的速度和音量
+        UpdateAllFingersVelocityAndVolume();
+        
+        // 更新食指尖速度信息用于UI显示
+        UpdateVelocityText(m_FilteredMagnitude);
         
         // 检查连接状态
         CheckConnectionStatus();
@@ -180,16 +194,7 @@ public class BLESendJointV : MonoBehaviour
 
     void OnDestroy()
     {
-        // 移除Slider监听器
-        if (m_VelocitySlider != null)
-        {
-            m_VelocitySlider.onValueChanged.RemoveListener(OnVelocitySliderChanged);
-        }
-
-        if (m_FilterStrengthSlider != null)
-        {
-            m_FilterStrengthSlider.onValueChanged.RemoveListener(OnFilterStrengthSliderChanged);
-        }
+        
 
         StopDataTransmission();
         StopReconnectProcess();
@@ -221,7 +226,7 @@ public class BLESendJointV : MonoBehaviour
             m_Manager.OnUpdateState((string state) =>
             {
                 Debug.Log("BLE state: " + state);
-                UpdateConnectionStatusUI("BLE状态: " + state);
+                UpdateConnectionStatusUI("BLE Status: " + state);
                 
                 if (state != "poweredOn") return;
                 
@@ -236,7 +241,10 @@ public class BLESendJointV : MonoBehaviour
             {
                 if (peripheral.name != "" && peripheral.name != null && peripheral.name != "(null-name)" && peripheral.name != "null-name")
                 {
-                    Debug.Log("Device discovered: " + peripheral.name);
+                    if (ShouldShowDebugInfo())
+                    {
+                        Debug.Log("Device discovered: " + peripheral.name);
+                    }
                 }
 
                 // 检查设备名称是否在目标列表中
@@ -257,7 +265,7 @@ public class BLESendJointV : MonoBehaviour
                 m_IsConnecting = true;
                 
                 Debug.Log("Scan stopped, preparing to connect to device: " + peripheral.name);
-                UpdateConnectionStatusUI("正在连接到: " + peripheral.name);
+                UpdateConnectionStatusUI("Connecting to: " + peripheral.name);
                 
                 m_Manager.ConnectToPeripheral(peripheral);
             });
@@ -272,7 +280,7 @@ public class BLESendJointV : MonoBehaviour
                 m_ConnectionLost = false;
                 
                 Debug.Log("Connected to device: " + peripheral.name);
-                UpdateConnectionStatusUI("已连接: " + peripheral.name);
+                UpdateConnectionStatusUI("Connected: " + peripheral.name);
                 
                 peripheral.discoverServices();
             });
@@ -296,7 +304,7 @@ public class BLESendJointV : MonoBehaviour
                 {
                     m_Characteristic = characteristic;
                     Debug.Log("RX characteristic found, ready to send data");
-                    UpdateConnectionStatusUI("已连接并就绪");
+                    UpdateConnectionStatusUI("Connected and Ready");
 
                     // 确保扫描已停止后才设置连接就绪状态
                     m_IsConnectedAndReady = true;
@@ -327,12 +335,12 @@ public class BLESendJointV : MonoBehaviour
         {
             // 记录初始化错误但允许程序继续运行
             Debug.LogError($"BLE initialization failed, but main process continues: {e.Message}");
-            UpdateConnectionStatusUI("BLE初始化失败: " + e.Message);
+            UpdateConnectionStatusUI("BLE Init Failed: " + e.Message);
         }
     }
 
     /// <summary>
-    /// 检查连接状态，如果长时间没有成功发送数据，认为连接已断开
+    /// 检查连接状态，如果长时间没有成功发送数据，认为Connection Lost
     /// </summary>
     private void CheckConnectionStatus()
     {
@@ -343,11 +351,14 @@ public class BLESendJointV : MonoBehaviour
         // 检查距离上次成功发送数据的时间
         double secondsSinceLastSuccess = (System.DateTime.Now - m_LastSuccessfulSend).TotalSeconds;
         
-        // 如果超过发送间隔的5倍，且连续失败次数超过阈值，认为连接已断开
+        // 如果超过发送间隔的5倍，且连续失败次数超过阈值，认为Connection Lost
         if (secondsSinceLastSuccess > m_SendInterval * 5 && m_ConsecutiveFailures >= m_FailureThreshold)
         {
-            Debug.Log($"Connection appears to be lost: {m_ConsecutiveFailures} consecutive failures, " +
-                     $"{secondsSinceLastSuccess:F1}s since last successful send");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.Log($"Connection appears to be lost: {m_ConsecutiveFailures} consecutive failures, " +
+                         $"{secondsSinceLastSuccess:F1}s since last successful send");
+            }
             
             m_ConnectionLost = true;
             m_IsConnectedAndReady = false;
@@ -355,12 +366,12 @@ public class BLESendJointV : MonoBehaviour
             // 如果启用了自动重连，开始重连过程
             if (m_AutoReconnect)
             {
-                UpdateConnectionStatusUI("连接已断开，正在尝试重连...");
+                UpdateConnectionStatusUI("Connection Lost, Reconnecting...");
                 StartReconnectProcess();
             }
             else
             {
-                UpdateConnectionStatusUI("连接已断开");
+                UpdateConnectionStatusUI("Connection Lost");
             }
         }
     }
@@ -375,14 +386,17 @@ public class BLESendJointV : MonoBehaviour
         try
         {
             m_IsScanStopped = false;
-            Debug.Log("Starting BLE scan...");
-            UpdateConnectionStatusUI("正在扫描设备...");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.Log("Starting BLE scan...");
+            }
+            UpdateConnectionStatusUI("Scanning Devices...");
             m_Manager.StartScan();
         }
         catch (System.Exception e)
         {
             Debug.LogError($"Failed to start scan: {e.Message}");
-            UpdateConnectionStatusUI("扫描失败: " + e.Message);
+            UpdateConnectionStatusUI("Scan Failed: " + e.Message);
         }
     }
 
@@ -425,22 +439,31 @@ public class BLESendJointV : MonoBehaviour
             // 检查最大重连次数
             if (m_MaxReconnectAttempts > 0 && m_ReconnectAttempts >= m_MaxReconnectAttempts)
             {
-                Debug.Log($"Maximum reconnect attempts ({m_MaxReconnectAttempts}) reached, stopping reconnect process");
-                UpdateConnectionStatusUI($"重连失败: 已达最大尝试次数 ({m_MaxReconnectAttempts})");
+                if (ShouldShowDebugInfo())
+                {
+                    Debug.Log($"Maximum reconnect attempts ({m_MaxReconnectAttempts}) reached, stopping reconnect process");
+                }
+                UpdateConnectionStatusUI($"Reconnect Failed: Max attempts reached ({m_MaxReconnectAttempts})");
                 m_IsReconnecting = false;
                 yield break;
             }
 
             m_ReconnectAttempts++;
-            Debug.Log($"Attempting to reconnect (attempt {m_ReconnectAttempts})...");
-            UpdateConnectionStatusUI($"正在尝试重连 (第{m_ReconnectAttempts}次)...");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.Log($"Attempting to reconnect (attempt {m_ReconnectAttempts})...");
+            }
+            UpdateConnectionStatusUI($"Reconnecting (Attempt {m_ReconnectAttempts})...");
 
             // 如果有之前连接的设备，尝试直接连接
             if (m_ConnectedPeripheral != null)
             {
                 
                 {
-                    Debug.Log($"Trying to reconnect to last device: {m_ConnectedPeripheral.name}");
+                    if (ShouldShowDebugInfo())
+                    {
+                        Debug.Log($"Trying to reconnect to last device: {m_ConnectedPeripheral.name}");
+                    }
                     m_IsConnecting = true;
                     m_Manager.ConnectToPeripheral(m_ConnectedPeripheral);
                     
@@ -455,7 +478,10 @@ public class BLESendJointV : MonoBehaviour
                     // 如果连接成功，退出重连循环
                     if (m_IsConnectedAndReady)
                     {
-                        Debug.Log("Reconnection successful");
+                        if (ShouldShowDebugInfo())
+                        {
+                            Debug.Log("Reconnection successful");
+                        }
                         m_IsReconnecting = false;
                         m_ConnectionLost = false;
                         yield break;
@@ -483,7 +509,10 @@ public class BLESendJointV : MonoBehaviour
                 // 如果连接成功，退出重连循环
                 if (m_IsConnectedAndReady)
                 {
-                    Debug.Log("Reconnection successful after scan");
+                    if (ShouldShowDebugInfo())
+                    {
+                        Debug.Log("Reconnection successful after scan");
+                    }
                     m_IsReconnecting = false;
                     m_ConnectionLost = false;
                     yield break;
@@ -494,83 +523,96 @@ public class BLESendJointV : MonoBehaviour
             yield return new WaitForSeconds(0.5f);
         }
     }
-
+    
     /// <summary>
-    /// 更新食指尖速度并映射到速度值
+    /// 更新所有手指的速度和音量
     /// </summary>
-    private void UpdateFingerVelocityAndSpeed()
+    private void UpdateAllFingersVelocityAndVolume()
     {
-        Vector3 rawVelocity = Vector3.zero;
-        float velocityMagnitude = 0f;
+       
 
-        #if UNITY_EDITOR
-        // 在编辑器中使用模拟值进行测试
-        rawVelocity = new Vector3(m_SimulatedVelocity, 0, 0);
-        #else
-        // 获取食指尖速度
-        if (m_HandTracker.TryGetJointPositionAndVelocity(
-            m_HandToUse, XRHandJointID.IndexTip, out Vector3 position, out Vector3 velocity))
+        // 手指关节ID数组
+        XRHandJointID[] fingerJoints = {
+            XRHandJointID.ThumbTip,
+            XRHandJointID.IndexTip,
+            XRHandJointID.MiddleTip,
+            XRHandJointID.RingTip,
+            XRHandJointID.LittleTip
+        };
+
+        // 为每个手指计算速度和音量（这里简化处理，实际可能需要更复杂的逻辑）
+        for (int i = 0; i < 10; i++)
         {
-            rawVelocity = velocity;
+            // 对于前5个通道使用右手，后5个通道使用左手
+            Handedness handToUse = (i < 5) ? Handedness.Right : Handedness.Left;
+            int jointIndex = i % 5;
+            
+            if (jointIndex < fingerJoints.Length)
+            {
+                Vector3 fingerRawVelocity = Vector3.zero;
+                
+                #if UNITY_EDITOR
+                // 在编辑器中使用模拟值进行测试
+                fingerRawVelocity = new Vector3(m_SimulatedVelocity, 0, 0);
+                #else
+                // 获取手指尖速度
+                if (m_HandTracker.TryGetJointPositionAndVelocity(
+                    handToUse, fingerJoints[jointIndex], out Vector3 position, out Vector3 velocity))
+                {
+                    fingerRawVelocity = velocity;
+                }
+                #endif
+
+                float fingerVelocityMagnitude = fingerRawVelocity.magnitude;
+                m_FingerVelocityMagnitudes[i] = fingerVelocityMagnitude;
+                
+                // 应用滤波
+                if (m_EnableVelocityFilter && m_VelocityFilter != null)
+                {
+                    fingerRawVelocity = m_VelocityFilter.Filter(fingerRawVelocity);
+                    fingerVelocityMagnitude = fingerRawVelocity.magnitude;
+                }
+                
+                // 应用速度大小滤波
+                if (m_EnableMagnitudeFilter && m_MagnitudeFilter != null)
+                {
+                    fingerVelocityMagnitude = m_MagnitudeFilter.Filter(fingerVelocityMagnitude);
+                }
+
+                // 应用倍率
+                fingerVelocityMagnitude = fingerVelocityMagnitude * m_VelocityMultiplier;
+
+                // 计算音量
+                byte volume = m_NormalVolume;
+                
+                // 检查手指是否击中物体，如果没有击中则静音
+                bool isFingerHit = false;
+                if (m_HandRaycaster != null)
+                {
+                    Handedness handToUse2 = (i < 5) ? Handedness.Right : Handedness.Left;
+                    int fingerIndex = i % 5;
+                    RaycastHit hit;
+                    isFingerHit = m_HandRaycaster.TryGetFingerHit(handToUse2, fingerIndex, out hit);
+                }
+                
+                // 如果手指没有击中物体，或者速度低于阈值，则静音
+                if (!isFingerHit || fingerVelocityMagnitude < m_VolumeThreshold)
+                {
+                    volume = 0; // 没有击中或速度低于阈值时静音
+                }
+                
+                // 保存每个手指的音量
+                m_FingerVolumes[i] = volume;
+
+                // 将速度映射到1.0x-4.0x范围 (10-40)
+                float clampedSpeed = Mathf.Clamp(fingerVelocityMagnitude, m_MinVelocityThreshold, m_MaxVelocityThreshold);
+                float normalizedSpeedFinger = Mathf.InverseLerp(m_MinVelocityThreshold, m_MaxVelocityThreshold, clampedSpeed);
+                int speedByteValue = Mathf.RoundToInt(Mathf.Lerp(MIN_SPEED_BYTE, MAX_SPEED_BYTE, normalizedSpeedFinger));
+                
+                // 保存每个手指的速度
+                m_FingerSpeeds[i] = (byte)speedByteValue;
+            }
         }
-        #endif
-
-        // 保存原始数据用于显示
-        m_RawVelocity = rawVelocity;
-        m_RawMagnitude = rawVelocity.magnitude;
-
-        // 根据原始速度决定音量
-        if (m_RawMagnitude < m_VolumeThreshold)
-        {
-            m_CurrentVolume = 0; // 原始速度低于阈值时静音
-        }
-        else
-        {
-            m_CurrentVolume = m_NormalVolume; // 使用正常音量
-        }
-
-        // 应用OneDollar滤波
-        Vector3 filteredVelocity = rawVelocity;
-        if (m_EnableVelocityFilter && m_VelocityFilter != null)
-        {
-            filteredVelocity = m_VelocityFilter.Filter(rawVelocity);
-        }
-
-        // 计算滤波后的速度大小
-        float filteredMagnitude = filteredVelocity.magnitude;
-        
-        // 对速度大小再次应用滤波（可选）
-        if (m_EnableMagnitudeFilter && m_MagnitudeFilter != null)
-        {
-            filteredMagnitude = m_MagnitudeFilter.Filter(filteredMagnitude);
-        }
-
-        // 保存滤波后的数据用于显示
-        m_FilteredVelocity = filteredVelocity;
-        m_FilteredMagnitude = filteredMagnitude;
-
-        // 如果有滑块，获取当前倍率值
-        if (m_VelocitySlider != null)
-        {
-            m_VelocityMultiplier = m_VelocitySlider.value;
-        }
-
-        // 确保倍率不为负数或零
-        m_VelocityMultiplier = Mathf.Max(0.1f, m_VelocityMultiplier);
-
-        // 应用倍率到滤波后的速度
-        velocityMagnitude = filteredMagnitude * m_VelocityMultiplier;
-
-        // 将速度映射到1.0x-4.0x范围 (10-40)
-        m_CurrentSpeed = Mathf.Clamp(velocityMagnitude, m_MinVelocityThreshold, m_MaxVelocityThreshold);
-        float normalizedSpeed = Mathf.InverseLerp(m_MinVelocityThreshold, m_MaxVelocityThreshold, m_CurrentSpeed);
-
-        // 将归一化的速度值(0-1)转换为整数值(10-40)
-        int speedValue = Mathf.RoundToInt(Mathf.Lerp(MIN_SPEED_BYTE, MAX_SPEED_BYTE, normalizedSpeed));
-        m_CurrentSpeedByte = (byte)speedValue;
-
-        // 更新UI显示
-        UpdateVelocityText(velocityMagnitude);
     }
 
     /// <summary>
@@ -586,12 +628,18 @@ public class BLESendJointV : MonoBehaviour
         // 确保扫描已停止后才开始发送数据
         if (m_IsScanStopped)
         {
-            Debug.Log("Starting periodic data transmission");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.Log("Starting periodic data transmission");
+            }
             m_DataSendCoroutine = StartCoroutine(SendDataPeriodically());
         }
         else
         {
-            Debug.LogWarning("Scan not stopped yet, cannot send data");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.LogWarning("Scan not stopped yet, cannot send data");
+            }
         }
     }
 
@@ -618,9 +666,6 @@ public class BLESendJointV : MonoBehaviour
         {
             try
             {
-                // 每次发送前更新速度
-                UpdateFingerVelocityAndSpeed();
-
                 if (m_Characteristic != null)
                 {
                     byte[] data = GenerateData(counter);
@@ -629,21 +674,30 @@ public class BLESendJointV : MonoBehaviour
                 }
                 else
                 {
-                    Debug.LogWarning("BLE characteristic not available, waiting for next attempt");
+                    if (ShouldShowDebugInfo())
+                    {
+                        Debug.LogWarning("BLE characteristic not available, waiting for next attempt");
+                    }
                     m_ConsecutiveFailures++;
                 }
             }
             catch (System.Exception e)
             {
                 // 捕获所有异常，确保协程不会因任何错误而中断
-                Debug.LogWarning($"Error occurred during transmission cycle, but continuing: {e.Message}");
+                if (ShouldShowDebugInfo())
+                {
+                    Debug.LogWarning($"Error occurred during transmission cycle, but continuing: {e.Message}");
+                }
                 m_ConsecutiveFailures++;
             }
 
             yield return new WaitForSeconds(m_SendInterval);
         }
         
-        Debug.Log("Data transmission stopped due to connection loss or state change");
+        if (ShouldShowDebugInfo())
+        {
+            Debug.Log("Data transmission stopped due to connection loss or state change");
+        }
     }
 
     /// <summary>
@@ -656,39 +710,31 @@ public class BLESendJointV : MonoBehaviour
         // 起始标记
         data[0] = 0xFE;
 
-        // 应用倍率影响到最终速度值
-        float basePlaybackRate = m_CurrentSpeedByte / 10f; // 原始映射速率（1.0x-4.0x）
-        float adjustedRate = basePlaybackRate;
-
-        // 如果有滑块，直接使用滑块的值作为倍率
-        if (m_VelocitySlider != null)
-        {
-            m_VelocityMultiplier = m_VelocitySlider.value;
-        }
-
-        // 应用倍率
-        adjustedRate = adjustedRate * m_VelocityMultiplier;
-
-        // 确保在有效范围内
-        adjustedRate = Mathf.Clamp(adjustedRate, 1.0f, 4.0f);
-
-        // 转换回字节值
-        byte finalSpeedByte = (byte)Mathf.RoundToInt(adjustedRate * 10);
-
         // 生成10个通道的数据
         for (int channel = 0; channel < 10; channel++)
         {
             int offset = 1 + channel * 3;
 
-            // 文件索引：循环使用0x01-0x0A
-            // data[offset] = (byte)((counter + channel) % 10 + 1);
-            data[offset] = (byte)(1);
+            // 文件索引：从ScreenSpaceProjector的fingerMats获取材质类型
+            byte fileIndex = 1; // 默认值
+            if (m_ScreenSpaceProjector != null)
+            {
+                string materialType = m_ScreenSpaceProjector.fingerMats[channel];
+                fileIndex = MapMaterialToIndex(materialType);
+            }
+            // TODO 这里由于相机有问题所以文件全部都用第五个
+            data[offset] = 5;
+            // data[offset] = fileIndex;
 
-            // 音量：根据原始速度决定是否静音
-            data[offset + 1] = m_CurrentVolume;
+            // 获取当前手指的速度和音量
+            byte fingerVolume = GetFingerVolume(channel);
+            byte fingerSpeed = GetFingerSpeed(channel);
 
-            // 速度：使用应用了倍率后的速度值
-            data[offset + 2] = finalSpeedByte;
+            // 音量：使用每个手指单独的音量值
+            data[offset + 1] = fingerVolume;
+
+            // 速度：使用每个手指单独的速度值
+            data[offset + 2] = fingerSpeed;
         }
 
         // 结束标记
@@ -704,7 +750,10 @@ public class BLESendJointV : MonoBehaviour
     {
         if (m_Characteristic == null || !m_IsConnectedAndReady || m_ConnectionLost)
         {
-            Debug.LogWarning("Characteristic not ready or connection lost");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.LogWarning("Characteristic not ready or connection lost");
+            }
             m_ConsecutiveFailures++;
             
             // 如果连续失败次数超过阈值，触发重连
@@ -715,13 +764,16 @@ public class BLESendJointV : MonoBehaviour
                 
                 if (m_AutoReconnect && !m_IsReconnecting)
                 {
-                    Debug.Log($"Connection appears to be lost after {m_ConsecutiveFailures} consecutive failures");
-                    UpdateConnectionStatusUI("连接已断开，正在尝试重连...");
+                    if (ShouldShowDebugInfo())
+                    {
+                        Debug.Log($"Connection appears to be lost after {m_ConsecutiveFailures} consecutive failures");
+                    }
+                    UpdateConnectionStatusUI("Connection Lost, Reconnecting...");
                     StartReconnectProcess();
                 }
                 else
                 {
-                    UpdateConnectionStatusUI("连接已断开");
+                    UpdateConnectionStatusUI("Connection Lost");
                 }
             }
             
@@ -736,7 +788,7 @@ public class BLESendJointV : MonoBehaviour
             m_ConsecutiveFailures = 0;
             m_LastSuccessfulSend = System.DateTime.Now;
 
-            if (m_ShowDebugInfo)
+            if (ShouldShowDebugInfo())
             {
                 // 打印发送的数据用于调试
                 string hexString = System.BitConverter.ToString(data).Replace("-", " ");
@@ -753,7 +805,10 @@ public class BLESendJointV : MonoBehaviour
         catch (System.Exception e)
         {
             // 记录错误并增加连续失败计数
-            Debug.LogWarning($"Failed to send data: {e.Message}");
+            if (ShouldShowDebugInfo())
+            {
+                Debug.LogWarning($"Failed to send data: {e.Message}");
+            }
             m_ConsecutiveFailures++;
             
             // 如果连续失败次数超过阈值，触发重连
@@ -764,13 +819,16 @@ public class BLESendJointV : MonoBehaviour
                 
                 if (m_AutoReconnect && !m_IsReconnecting)
                 {
-                    Debug.Log($"Connection appears to be lost after {m_ConsecutiveFailures} consecutive failures");
-                    UpdateConnectionStatusUI("连接已断开，正在尝试重连...");
+                    if (ShouldShowDebugInfo())
+                    {
+                        Debug.Log($"Connection appears to be lost after {m_ConsecutiveFailures} consecutive failures");
+                    }
+                    UpdateConnectionStatusUI("Connection Lost, Reconnecting...");
                     StartReconnectProcess();
                 }
                 else
                 {
-                    UpdateConnectionStatusUI("连接已断开");
+                    UpdateConnectionStatusUI("Connection Lost");
                 }
             }
         }
@@ -787,6 +845,8 @@ public class BLESendJointV : MonoBehaviour
             return;
         }
 
+        // LogDataContent is only called from within a ShouldShowDebugInfo() block,
+        // so we don't need to check again here
         Debug.Log("=== Data Content ===");
         for (int i = 0; i < 10; i++)
         {
@@ -800,44 +860,7 @@ public class BLESendJointV : MonoBehaviour
         }
         Debug.Log("==================");
     }
-
-    /// <summary>
-    /// 手动发送单次数据（可以通过UI按钮调用）
-    /// </summary>
-    public void SendSingleData()
-    {
-        try
-        {
-            if (m_IsConnectedAndReady && m_Characteristic != null && m_IsScanStopped && !m_ConnectionLost)
-            {
-                UpdateFingerVelocityAndSpeed(); // 更新当前速度
-                byte[] data = GenerateData(0);
-                SendDataToESP32(data);
-            }
-            else
-            {
-                if (!m_IsScanStopped)
-                {
-                    Debug.LogWarning("Scan not stopped yet, cannot send data");
-                }
-                else if (m_ConnectionLost)
-                {
-                    Debug.LogWarning("Connection lost, cannot send data");
-                }
-                else
-                {
-                    Debug.LogWarning("BLE not connected or characteristic not ready");
-                }
-            }
-        }
-        catch (System.Exception e)
-        {
-            // 捕获任何异常，确保不影响调用方
-            Debug.LogWarning($"Error occurred while sending single data, but continuing: {e.Message}");
-            m_ConsecutiveFailures++;
-        }
-    }
-
+    
     /// <summary>
     /// 更新速度显示文本
     /// </summary>
@@ -851,8 +874,9 @@ public class BLESendJointV : MonoBehaviour
                 // 显示原始速度、滤波后速度、映射后的速度和音量状态
                 string filterInfo = m_EnableVelocityFilter ? $"(filter strength: {m_VelocityFilterStrength:F2})" : "(no filter)";
                 string volumeStatus = m_CurrentVolume == 0 ? "Mute" : $"Volume {m_CurrentVolume}%";
-                m_VelocityText.text = $"Ori V: {m_RawMagnitude:F3} m/s\nFiltered V: {m_FilteredMagnitude:F3} m/s {filterInfo}\nPlay V: {m_CurrentSpeedByte / 10f:F1}x\nFactor: {(m_VelocitySlider != null ? m_VelocitySlider.value : m_VelocityMultiplier):F1}\n{volumeStatus}";
-
+                
+                // 使用当前倍率值(由外部通过SetVelocityMultiplier方法设置)
+                m_VelocityText.text = $"Ori V: {m_RawMagnitude:F3} m/s\nFiltered V: {m_FilteredMagnitude:F3} m/s {filterInfo}\nPlay V: {m_CurrentSpeedByte / 10f:F1}x\nFactor: {m_VelocityMultiplier:F1}\nMin V: {m_MinVelocityThreshold:F3} m/s\nMax V: {m_MaxVelocityThreshold:F3} m/s\n{volumeStatus}\n"+GetFilterStatus();
                 // 根据滤波后的速度变化颜色，静音时显示灰色
                 if (m_CurrentVolume == 0)
                 {
@@ -870,6 +894,9 @@ public class BLESendJointV : MonoBehaviour
                 Debug.LogWarning($"Error occurred while updating velocity UI: {e.Message}");
             }
         }
+        
+        // 同时更新连接状态文本中的手指信息
+        UpdateFingerInfoText();
     }
     
     /// <summary>
@@ -881,25 +908,25 @@ public class BLESendJointV : MonoBehaviour
         {
             try
             {
-                m_ConnectionStatusText.text = status;
+                m_ConnectionStatusText.text = "BLE status: " + status;
                 
-                // 根据状态设置颜色
-                if (status.Contains("已连接并就绪"))
-                {
-                    m_ConnectionStatusText.color = Color.green;
-                }
-                else if (status.Contains("正在连接") || status.Contains("正在扫描") || status.Contains("正在尝试重连"))
-                {
-                    m_ConnectionStatusText.color = Color.yellow;
-                }
-                else if (status.Contains("连接断开") || status.Contains("失败") || status.Contains("错误"))
-                {
-                    m_ConnectionStatusText.color = Color.red;
-                }
-                else
-                {
-                    m_ConnectionStatusText.color = Color.white;
-                }
+                // // 根据状态设置颜色
+                // if (status.Contains("Connected and Ready"))
+                // {
+                //     m_ConnectionStatusText.color = Color.green;
+                // }
+                // else if (status.Contains("Connecting") || status.Contains("Scanning") || status.Contains("Reconnecting"))
+                // {
+                //     m_ConnectionStatusText.color = Color.yellow;
+                // }
+                // else if (status.Contains("Lost") || status.Contains("Failed") || status.Contains("Error"))
+                // {
+                //     m_ConnectionStatusText.color = Color.red;
+                // }
+                // else
+                // {
+                //     m_ConnectionStatusText.color = Color.white;
+                // }
             }
             catch (System.Exception e)
             {
@@ -909,128 +936,57 @@ public class BLESendJointV : MonoBehaviour
     }
     
     /// <summary>
-    /// 设置速度倍率滑块
+    /// 更新手指信息文本
     /// </summary>
-    /// <param name="slider">用于控制速度倍率的滑块</param>
-    public void SetVelocitySlider(UnityEngine.UI.Slider slider)
+    private void UpdateFingerInfoText()
     {
-        // 移除之前的监听器（如果有）
-        if (m_VelocitySlider != null)
+        if (m_ConnectionStatusText != null)
         {
-            m_VelocitySlider.onValueChanged.RemoveListener(OnVelocitySliderChanged);
-        }
-
-        // 设置新的滑块并添加监听器
-        m_VelocitySlider = slider;
-
-        if (m_VelocitySlider != null)
-        {
-            // 设置滑块初始值为当前倍率
-            m_VelocitySlider.value = m_VelocityMultiplier;
-
-            // 添加值变化监听器
-            m_VelocitySlider.onValueChanged.AddListener(OnVelocitySliderChanged);
-
-            if (m_ShowDebugInfo)
+            try
             {
-                Debug.Log($"Velocity multiplier slider set, current value: {m_VelocitySlider.value:F1}");
+                // 构建每个手指的信息
+                string fingerInfo = "\nFingers Status:";
+                string[] fingerNames = {"Thumb", "Index", "Middle", "Ring", "Little"};
+                
+                for (int i = 0; i < 10; i++)
+                {
+                    int handIndex = i / 5;  // 0 for right hand, 1 for left hand
+                    int fingerIndex = i % 5;
+                    string handName = handIndex == 0 ? "R" : "L";
+                    
+                    fingerInfo += $"\n{handName}-{fingerNames[fingerIndex]}: V={m_FingerVelocityMagnitudes[i]:F3}m/s, Vol={m_FingerVolumes[i]}%, Speed={m_FingerSpeeds[i] / 10f:F1}x";
+                }
+                
+                // 添加到现有文本后面
+                m_ConnectionStatusText.text = fingerInfo;
+                // m_ConnectionStatusText.color = new Color(4,145,255,255);
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning($"Error updating finger info text: {e.Message}");
             }
         }
     }
+    
+
 
     /// <summary>
-    /// 设置滤波强度滑块
-    /// </summary>
-    /// <param name="slider">用于控制滤波强度的滑块</param>
-    public void SetFilterStrengthSlider(UnityEngine.UI.Slider slider)
-    {
-        // 移除之前的监听器（如果有）
-        if (m_FilterStrengthSlider != null)
-        {
-            m_FilterStrengthSlider.onValueChanged.RemoveListener(OnFilterStrengthSliderChanged);
-        }
-
-        // 设置新的滑块并添加监听器
-        m_FilterStrengthSlider = slider;
-
-        if (m_FilterStrengthSlider != null)
-        {
-            // 设置滑块初始值为当前滤波强度
-            m_FilterStrengthSlider.value = m_VelocityFilterStrength;
-
-            // 添加值变化监听器
-            m_FilterStrengthSlider.onValueChanged.AddListener(OnFilterStrengthSliderChanged);
-
-            if (m_ShowDebugInfo)
-            {
-                Debug.Log($"Filter strength slider set, current value: {m_FilterStrengthSlider.value:F2}");
-            }
-        }
-    }
-
-    /// <summary>
-    /// 获取当前实际播放速率（已应用倍率）
-    /// </summary>
-    /// <returns>实际播放速率(1.0x-4.0x)</returns>
-    public float GetActualPlaybackRate()
-    {
-        float basePlaybackRate = m_CurrentSpeedByte / 10f; // 原始映射速率（1.0x-4.0x）
-        return Mathf.Clamp(basePlaybackRate * m_VelocityMultiplier, 1.0f, 4.0f); // 应用倍率后的实际速率
-    }
-
-    /// <summary>
-    /// 响应速度倍率滑块值变化
-    /// </summary>
-    /// <param name="value">滑块的值</param>
-    private void OnVelocitySliderChanged(float value)
-    {
-        SetVelocityMultiplier(value);
-    }
-
-    /// <summary>
-    /// 响应滤波强度滑块值变化
-    /// </summary>
-    /// <param name="value">滑块的值</param>
-    private void OnFilterStrengthSliderChanged(float value)
-    {
-        SetFilterStrength(value);
-    }
-
-    /// <summary>
-    /// 设置速度倍率（用于注册到Slider的valueChanged事件）
+    /// 设置速度倍率
     /// </summary>
     /// <param name="multiplier">速度倍率，建议范围0.1-5.0</param>
     public void SetVelocityMultiplier(float multiplier)
     {
         // 确保倍率在合理范围内
         m_VelocityMultiplier = Mathf.Clamp(multiplier, 0.1f, 10.0f);
-
-        // 立即更新速度显示
-        UpdateFingerVelocityAndSpeed();
-
+        
         // 计算实际会传输的速度值
         float basePlaybackRate = m_CurrentSpeedByte / 10f; // 原始映射速率（1.0x-4.0x）
         float actualPlaybackRate = Mathf.Clamp(basePlaybackRate * m_VelocityMultiplier, 1.0f, 4.0f); // 应用倍率后的实际速率
         byte finalSpeedByte = (byte)Mathf.RoundToInt(actualPlaybackRate * 10); // 最终传输的字节值
 
-        if (m_ShowDebugInfo)
+        if (ShouldShowDebugInfo())
         {
             Debug.Log($"Velocity multiplier set to: {m_VelocityMultiplier:F1}, Original speed: {basePlaybackRate:F1}x, Actual transmission speed: {actualPlaybackRate:F1}x (Value: {finalSpeedByte})");
-        }
-
-        // 如果正在发送数据，可以考虑立即发送一次最新速度的数据
-        if (m_DataSendCoroutine != null && m_IsConnectedAndReady && m_Characteristic != null && !m_ConnectionLost)
-        {
-            try
-            {
-                byte[] data = GenerateData(0);
-                SendDataToESP32(data);
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning($"Error occurred while sending data after multiplier change: {e.Message}");
-                m_ConsecutiveFailures++;
-            }
         }
     }
 
@@ -1054,7 +1010,7 @@ public class BLESendJointV : MonoBehaviour
             m_MagnitudeFilter.SetFilterStrength(m_MagnitudeFilterStrength);
         }
 
-        if (m_ShowDebugInfo)
+        if (ShouldShowDebugInfo())
         {
             Debug.Log($"Filter strength set to: {m_VelocityFilterStrength:F2}");
         }
@@ -1068,42 +1024,24 @@ public class BLESendJointV : MonoBehaviour
     {
         m_VolumeThreshold = Mathf.Max(0f, threshold);
         
-        if (m_ShowDebugInfo)
+        if (ShouldShowDebugInfo())
         {
-            Debug.Log($"Volume threshold set to: {m_VolumeThreshold:F3} m/s");
+            Debug.Log($"Local volume threshold set to: {m_VolumeThreshold:F3} m/s");
         }
     }
-
+    
     /// <summary>
-    /// 设置正常播放音量
+    /// 设置速度映射的最大阈值
     /// </summary>
-    /// <param name="volume">音量值（0-100）</param>
-    public void SetNormalVolume(byte volume)
+    /// <param name="threshold">速度映射的最大阈值（米/秒）</param>
+    public void SetMaxVelocityThreshold(float threshold)
     {
-        m_NormalVolume = (byte)Mathf.Clamp(volume, 0, 100);
+        m_MaxVelocityThreshold = Mathf.Max(m_MinVelocityThreshold + 0.01f, threshold);
         
-        if (m_ShowDebugInfo)
+        if (ShouldShowDebugInfo())
         {
-            Debug.Log($"Normal playback volume set to: {m_NormalVolume}%");
+            Debug.Log($"Max velocity threshold set to: {m_MaxVelocityThreshold:F3} m/s");
         }
-    }
-
-    /// <summary>
-    /// 获取当前音量状态
-    /// </summary>
-    /// <returns>当前音量值</returns>
-    public byte GetCurrentVolume()
-    {
-        return m_CurrentVolume;
-    }
-
-    /// <summary>
-    /// 是否处于静音状态
-    /// </summary>
-    /// <returns>true表示静音，false表示正常播放</returns>
-    public bool IsMuted()
-    {
-        return m_CurrentVolume == 0;
     }
 
     /// <summary>
@@ -1119,7 +1057,7 @@ public class BLESendJointV : MonoBehaviour
             m_VelocityFilter.Reset();
         }
 
-        if (m_ShowDebugInfo)
+        if (ShouldShowDebugInfo())
         {
             Debug.Log($"Velocity filter {(enable ? "enabled" : "disabled")}");
         }
@@ -1131,6 +1069,7 @@ public class BLESendJointV : MonoBehaviour
     /// <param name="enable">是否启用滤波</param>
     public void SetMagnitudeFilterEnabled(bool enable)
     {
+        // 直接应用从服务器接收到的设置
         m_EnableMagnitudeFilter = enable;
 
         if (!enable && m_MagnitudeFilter != null)
@@ -1138,32 +1077,12 @@ public class BLESendJointV : MonoBehaviour
             m_MagnitudeFilter.Reset();
         }
 
-        if (m_ShowDebugInfo)
+        if (ShouldShowDebugInfo())
         {
-            Debug.Log($"Magnitude filter {(enable ? "enabled" : "disabled")}");
+            Debug.Log($"Magnitude filter set to {(enable ? "enabled" : "disabled")} by server");
         }
     }
-
-    /// <summary>
-    /// 重置所有滤波器
-    /// </summary>
-    public void ResetFilters()
-    {
-        if (m_VelocityFilter != null)
-        {
-            m_VelocityFilter.Reset();
-        }
-
-        if (m_MagnitudeFilter != null)
-        {
-            m_MagnitudeFilter.Reset();
-        }
-
-        if (m_ShowDebugInfo)
-        {
-            Debug.Log("All filters reset");
-        }
-    }
+    
 
     /// <summary>
     /// 获取滤波器状态信息
@@ -1172,46 +1091,119 @@ public class BLESendJointV : MonoBehaviour
     public string GetFilterStatus()
     {
         string volumeStatus = m_CurrentVolume == 0 ? "Muted" : $"Volume {m_CurrentVolume}%";
+        
+        // 所有设置都由外部通过相应的方法设置
+        float currentThreshold = m_VolumeThreshold;
+        bool currentMagnitudeFilterEnabled = m_EnableMagnitudeFilter;
+        
         return $"Velocity filter: {(m_EnableVelocityFilter ? "Enabled" : "Disabled")} (Strength: {m_VelocityFilterStrength:F2})\n" +
-               $"Magnitude filter: {(m_EnableMagnitudeFilter ? "Enabled" : "Disabled")} (Strength: {m_MagnitudeFilterStrength:F2})\n" +
+               $"Magnitude filter: {(currentMagnitudeFilterEnabled ? "Enabled" : "Disabled")} (Strength: {m_MagnitudeFilterStrength:F2})\n" +
                $"Raw velocity: {m_RawMagnitude:F3} m/s\n" +
                $"Filtered velocity: {m_FilteredMagnitude:F3} m/s\n" +
-               $"Volume threshold: {m_VolumeThreshold:F3} m/s\n" +
+               $"Volume threshold: {currentThreshold:F3} m/s\n" +
                $"Current status: {volumeStatus}";
+    }
+    
+    
+    /// <summary>
+    /// 将材质类型映射到文件索引
+    /// </summary>
+    /// <param name="materialType">材质类型字符串</param>
+    /// <returns>对应的文件索引(1-12)，如果未找到匹配则返回1</returns>
+    private byte MapMaterialToIndex(string materialType)
+    {
+        if (string.IsNullOrEmpty(materialType))
+            return 1; // 默认值
+
+        switch (materialType.ToUpper())
+        {
+            case "M1": return 1;   // 金属
+            case "M2": return 2;   // 玻璃/陶瓷
+            case "M3": return 3;   // 硬塑
+            case "M4": return 4;   // 木材
+            case "M5": return 5;   // 石材/水泥
+            case "M6": return 6;   // 织物/毛皮
+            case "M7": return 7;   // 皮革/橡胶
+            case "M8": return 8;   // 纸/纸板
+            case "M9": return 9;   // 食物软组织
+            case "M10": return 10; // 植被/土壤
+            case "M11": return 11; // 电子玻璃面板
+            case "M12": return 12; // 泡沫/海绵/复合
+            default: return 1;     // 默认值
+        }
     }
 
     /// <summary>
-    /// 切换数据发送状态
+    /// 获取指定手指的音量
     /// </summary>
-    public void ToggleDataTransmission()
+    /// <param name="fingerIndex">手指索引(0-9)</param>
+    /// <returns>音量值(0-100)</returns>
+    private byte GetFingerVolume(int fingerIndex)
     {
-        if (m_DataSendCoroutine != null)
-        {
-            StopDataTransmission();
-            Debug.Log("Data transmission stopped");
-        }
-        else if (m_IsConnectedAndReady && m_IsScanStopped && !m_ConnectionLost)
-        {
-            StartDataTransmission();
-            Debug.Log("Data transmission started");
-        }
-        else if (!m_IsScanStopped)
-        {
-            Debug.LogWarning("Scan not stopped yet, cannot send data");
-        }
-        else if (m_ConnectionLost)
-        {
-            Debug.LogWarning("Connection lost, cannot start transmission");
+        if (fingerIndex < 0 || fingerIndex >= 10)
+            return 0;
+        
+        // 如果还没有初始化，则使用全局音量
+        if (m_FingerVolumes[fingerIndex] == 0 && m_CurrentVolume > 0)
+            return m_CurrentVolume;
             
-            // 如果连接已断开但未在重连，可以尝试重连
-            if (m_AutoReconnect && !m_IsReconnecting)
-            {
-                Debug.Log("Attempting to reconnect before starting transmission");
-                StartReconnectProcess();
-            }
+        return m_FingerVolumes[fingerIndex];
+    }
+
+    /// <summary>
+    /// 获取指定手指的速度
+    /// </summary>
+    /// <param name="fingerIndex">手指索引(0-9)</param>
+    /// <returns>速度值(10-40)</returns>
+    private byte GetFingerSpeed(int fingerIndex)
+    {
+        if (fingerIndex < 0 || fingerIndex >= 10)
+            return 10; // 默认最小速度
+        
+        // 如果还没有初始化，则使用全局速度
+        if (m_FingerSpeeds[fingerIndex] == 0 && m_CurrentSpeedByte > 0)
+            return m_CurrentSpeedByte;
+            
+        // 确保速度在有效范围内
+        return (byte)Mathf.Clamp(m_FingerSpeeds[fingerIndex], MIN_SPEED_BYTE, MAX_SPEED_BYTE);
+    }
+
+    /// <summary>
+    /// 设置指定手指的音量
+    /// </summary>
+    /// <param name="fingerIndex">手指索引(0-9)</param>
+    /// <param name="volume">音量值(0-100)</param>
+    public void SetFingerVolume(int fingerIndex, byte volume)
+    {
+        if (fingerIndex < 0 || fingerIndex >= 10)
+            return;
+            
+        m_FingerVolumes[fingerIndex] = (byte)Mathf.Clamp(volume, 0, 100);
+        
+        if (ShouldShowDebugInfo())
+        {
+            Debug.Log($"Finger {fingerIndex} volume set to: {m_FingerVolumes[fingerIndex]}");
         }
     }
-    
+
+    /// <summary>
+    /// 设置指定手指的速度
+    /// </summary>
+    /// <param name="fingerIndex">手指索引(0-9)</param>
+    /// <param name="speed">速度值(10-40)</param>
+    public void SetFingerSpeed(int fingerIndex, byte speed)
+    {
+        if (fingerIndex < 0 || fingerIndex >= 10)
+            return;
+            
+        m_FingerSpeeds[fingerIndex] = (byte)Mathf.Clamp(speed, MIN_SPEED_BYTE, MAX_SPEED_BYTE);
+        
+        if (ShouldShowDebugInfo())
+        {
+            Debug.Log($"Finger {fingerIndex} speed set to: {m_FingerSpeeds[fingerIndex]} ({m_FingerSpeeds[fingerIndex] / 10f:F1}x)");
+        }
+    }
+
     /// <summary>
     /// 手动触发重连（可以通过UI按钮调用）
     /// </summary>
@@ -1233,56 +1225,8 @@ public class BLESendJointV : MonoBehaviour
         m_ConnectionLost = true;
         
         // 开始重连
-        UpdateConnectionStatusUI("手动触发重连...");
+        UpdateConnectionStatusUI("Manual Reconnect Triggered...");
         StartReconnectProcess();
     }
 
-    /// <summary>
-    /// 设置自动重连
-    /// </summary>
-    public void SetAutoReconnect(bool enable)
-    {
-        m_AutoReconnect = enable;
-        Debug.Log($"Auto reconnect {(enable ? "enabled" : "disabled")}");
-    }
-
-    /// <summary>
-    /// 获取连接状态信息
-    /// </summary>
-    public string GetConnectionStatus()
-    {
-        if (m_IsConnectedAndReady && !m_ConnectionLost)
-        {
-            return $"已连接: {(m_ConnectedPeripheral != null ? m_ConnectedPeripheral.name : "Unknown")}";
-        }
-        else if (m_IsReconnecting)
-        {
-            return $"正在尝试重连 (第{m_ReconnectAttempts}次)...";
-        }
-        else if (m_IsConnecting)
-        {
-            return "正在连接...";
-        }
-        else if (!m_IsScanStopped)
-        {
-            return "正在扫描设备...";
-        }
-        else if (m_ConnectionLost)
-        {
-            return "连接已断开";
-        }
-        else
-        {
-            return "未连接";
-        }
-    }
-    
-    /// <summary>
-    /// 设置连续失败阈值
-    /// </summary>
-    public void SetFailureThreshold(int threshold)
-    {
-        m_FailureThreshold = Mathf.Max(1, threshold);
-        Debug.Log($"Failure threshold set to: {m_FailureThreshold}");
-    }
 }

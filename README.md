@@ -1,5 +1,8 @@
 # FeltSight
 
+中文文档：[`README.md`](README.md)  
+English version: [`README_EN.md`](README_EN.md)
+
 这是一个面向 Apple Vision Pro / visionOS 的 Unity 交互项目，核心目标是把**手部追踪**、**空间网格碰撞分类**与**BLE 触觉手套**连接起来，让用户在接触真实空间表面时获得对应的触觉反馈。
 
 **把 Vision Pro 感知到的“手指接触空间表面”事件，实时转换成十路 BLE 触觉控制信号。**
@@ -445,6 +448,33 @@ FeltSight 可以理解为一个“空间触觉映射”实验：
 - 看起来像蓝牙代码没有进入，或者进入后没有任何反馈
 
 因此，这两个 `Privacy` 蓝牙描述项应视为 Xcode 导出工程中的 BLE 必检配置。
+
+### Xcode 构建报错：`CoreBluetooth.framework did not contain an Info.plist`
+
+如果在 Xcode 编译 visionOS 工程时出现类似下面的错误：
+
+```text
+Framework .../MeshClassification.app/Frameworks/CoreBluetooth.framework did not contain an Info.plist
+```
+
+通常不是因为 [`mcUnityCoreBluetooth.bundle`](Assets/Plugins/UnityCoreBluetooth/Plugins/macOS/mcUnityCoreBluetooth.bundle) 没有被排除，而是因为 `CoreBluetooth.framework` 被错误地作为 **Embedded Framework** 复制进了应用包。
+
+对于 visionOS，`CoreBluetooth.framework` 属于系统框架，应当 **Link**，但不应 **Embed**。
+
+#### 手动修复步骤（Xcode）
+
+1. 打开 Unity 导出的 Xcode 工程。
+2. 选中主 Target。
+3. 进入 `General` 标签页。
+4. 找到 `Frameworks, Libraries, and Embedded Content`。
+5. 找到 `CoreBluetooth.framework`。
+6. 将其 `Embed` 方式改为 `Do Not Embed`。
+
+#### 说明
+
+- [`Assets/Plugins/UnityCoreBluetooth/Plugins/macOS/mcUnityCoreBluetooth.bundle`](Assets/Plugins/UnityCoreBluetooth/Plugins/macOS/mcUnityCoreBluetooth.bundle) 对 visionOS 保持排除是正确的。
+- 真正需要避免的是把系统框架 `CoreBluetooth.framework` 打进 `.app/Frameworks/` 目录。
+- 如果项目里有自定义 Xcode 后处理脚本，例如 [`VisionOSBuildPostProcessor`](Assets/Editor/VisionOSBuildPostProcessor.cs)，需要确保其中对 `CoreBluetooth.framework` 的处理是 **Link Only / Do Not Embed**。
 
 ---
 

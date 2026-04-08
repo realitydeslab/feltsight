@@ -23110,8 +23110,8 @@ MonoBehaviour:
   - {fileID: 1932541896}
   righthandShiZhiRayHitIndicator: {fileID: 0}
   showDebugInfo: 1
-  isEnableBLE: 0
-  showBLEDebugInfo: 0
+  isEnableBLE: 1
+  showBLEDebugInfo: 1
   currentPlatform: 0
   Ble: {fileID: 1461729647}
   AllUI: {fileID: 1092308375}

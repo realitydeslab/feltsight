@@ -715,16 +715,8 @@ public class BLESendJointV : MonoBehaviour
         {
             int offset = 1 + channel * 3;
 
-            // 文件索引：从ScreenSpaceProjector的fingerMats获取材质类型
-            byte fileIndex = 1; // 默认值
-            if (m_ScreenSpaceProjector != null)
-            {
-                string materialType = m_ScreenSpaceProjector.fingerMats[channel];
-                fileIndex = MapMaterialToIndex(materialType);
-            }
-            // TODO 这里由于相机有问题所以文件全部都用第五个
-            data[offset] = 5;
-            // data[offset] = fileIndex;
+            // 文件索引：根据手指命中的 mesh classification 映射得到
+            data[offset] = GetFingerTypeIndex(channel);
 
             // 获取当前手指的速度和音量
             byte fingerVolume = GetFingerVolume(channel);
@@ -1131,6 +1123,29 @@ public class BLESendJointV : MonoBehaviour
             case "M12": return 12; // 泡沫/海绵/复合
             default: return 1;     // 默认值
         }
+    }
+
+    private byte GetFingerTypeIndex(int fingerIndex)
+    {
+        if (m_HandRaycaster == null || fingerIndex < 0 || fingerIndex >= 10)
+            return 0;
+
+        var handedness = fingerIndex < 5 ? Handedness.Right : Handedness.Left;
+        var handFingerIndex = fingerIndex < 5 ? fingerIndex : fingerIndex - 5;
+
+        if (!m_HandRaycaster.TryGetFingerHitClassification(handedness, handFingerIndex, out var hitTypeIndex, out _))
+            return 0;
+
+        return (byte)Mathf.Clamp(RemapBleTypeIndex(hitTypeIndex), 0, 255);
+    }
+
+    private int RemapBleTypeIndex(int hitTypeIndex)
+    {
+        return hitTypeIndex switch
+        {
+            5 => 6,
+            _ => hitTypeIndex
+        };
     }
 
     /// <summary>

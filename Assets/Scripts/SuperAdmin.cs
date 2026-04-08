@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using UnityEngine;
 using Sentry.Unity;
 using UnityEngine.UI; // 添加这行来支持RawImage
@@ -10,6 +11,13 @@ public class SuperAdmin : MonoBehaviour
     [Header("设置区")]
     [Tooltip("控制测试UI界面是否会显示")]
     public bool isDebug=true;
+    
+
+    public void SetDebug(bool debugEnabled)
+    {
+        isDebug = debugEnabled;
+        ApplyDebugState();
+    }
 
 
     [Header("Hand相关配置")] 
@@ -22,6 +30,20 @@ public class SuperAdmin : MonoBehaviour
     public GameObject righthandShiZhiRayHitIndicator;
     [Tooltip("是否显示手指投影调试信息")]
     public bool showDebugInfo = true;
+
+    private readonly string[] m_DefaultFingerHitTexts =
+    {
+        "L Thumb: -",
+        "L Index: -",
+        "L Middle: -",
+        "L Ring: -",
+        "L Little: -",
+        "R Thumb: -",
+        "R Index: -",
+        "R Middle: -",
+        "R Ring: -",
+        "R Little: -"
+    };
     
     
     [Header("蓝牙BLE相关配置")] 
@@ -80,8 +102,6 @@ public class SuperAdmin : MonoBehaviour
         
         superAdmin = this;
         DontDestroyOnLoad(gameObject);
-        
-        AllUI.SetActive(isDebug);
 
 #if UNITY_VISIONOS && !UNITY_EDITOR
         currentPlatform = PlatformType.VisionOS;
@@ -91,14 +111,7 @@ public class SuperAdmin : MonoBehaviour
 #endif
 
         isEnableHandDetection=isEnableHandDetection || currentPlatform==PlatformType.VisionOS;
-        handFuncAll.SetActive(isEnableHandDetection);
-        isShowHandRayHitClass=isShowHandRayHitClass&&isEnableHandDetection;
-        righthandShiZhiRayHitIndicator.SetActive(isShowHandRayHitClass);
-        foreach (var text in handRayHitClassTexts)
-        {
-            text.SetActive(isShowHandRayHitClass);
-        }
-        
+        ApplyDebugState();
         
         if (!Ble)
         {
@@ -116,6 +129,66 @@ public class SuperAdmin : MonoBehaviour
     void Update()
     {
 
+    }
+
+    private void ApplyDebugState()
+    {
+        if (AllUI != null)
+            AllUI.SetActive(isDebug);
+
+        if (handFuncAll != null)
+            handFuncAll.SetActive(isEnableHandDetection);
+
+        var shouldShowHandRayHitClass = isDebug && isShowHandRayHitClass && isEnableHandDetection;
+
+        if (righthandShiZhiRayHitIndicator != null)
+            righthandShiZhiRayHitIndicator.SetActive(shouldShowHandRayHitClass);
+
+        if (handRayHitClassTexts == null)
+            return;
+
+        for (var i = 0; i < handRayHitClassTexts.Length; i++)
+        {
+            var text = handRayHitClassTexts[i];
+            if (text == null)
+                continue;
+
+            text.SetActive(shouldShowHandRayHitClass);
+            if (shouldShowHandRayHitClass)
+                ResetFingerHitInfo(i);
+        }
+    }
+
+    public void SetFingerHitInfo(int fingerArrayIndex, string info)
+    {
+        if (!isShowHandRayHitClass)
+            return;
+
+        if (handRayHitClassTexts == null || fingerArrayIndex < 0 || fingerArrayIndex >= handRayHitClassTexts.Length)
+            return;
+
+        var target = handRayHitClassTexts[fingerArrayIndex];
+        if (target == null)
+            return;
+
+        if (target.TryGetComponent<TextMeshProUGUI>(out var tmpText))
+        {
+            tmpText.text = info;
+            return;
+        }
+
+        if (target.TryGetComponent<Text>(out var uiText))
+        {
+            uiText.text = info;
+        }
+    }
+
+    public void ResetFingerHitInfo(int fingerArrayIndex)
+    {
+        if (m_DefaultFingerHitTexts == null || fingerArrayIndex < 0 || fingerArrayIndex >= m_DefaultFingerHitTexts.Length)
+            return;
+
+        SetFingerHitInfo(fingerArrayIndex, m_DefaultFingerHitTexts[fingerArrayIndex]);
     }
     
 

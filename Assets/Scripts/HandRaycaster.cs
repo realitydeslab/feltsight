@@ -1,8 +1,11 @@
 using System.Collections.Generic;
+using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.VFX;
+using UnityEngine.XR.ARSubsystems;
 using UnityEngine.XR.Hands;
+using UnityEngine.XR.VisionOS;
 
 /// <summary>
 ///     基于 Unity.Mathematics 的 OneEuro 滤波器，用于 2D 向量
@@ -193,7 +196,6 @@ public class HandRaycaster : MonoBehaviour
     [Header("射线Visualize")] [SerializeField]
     private LineRenderer[] lineRenderers; // From Left to Right, from damuzhi to xiaomuzhi
 
-    [SerializeField] private Camera cam;
     [SerializeField] private VisualEffect[] vfx;
     [SerializeField] private VFXMan vv;
 
@@ -227,6 +229,9 @@ public class HandRaycaster : MonoBehaviour
 
     // 材质类型到HDR颜色的映射
     private readonly Dictionary<string, int> materialColorMap = new();
+
+    private readonly Dictionary<string, int> lastHitColorIndices = new();
+    private readonly Dictionary<string, string> lastHitClassNames = new();
 
 
     // SuperAdmin引用
@@ -298,7 +303,8 @@ public class HandRaycaster : MonoBehaviour
                 // 执行射线检测
                 var offset = Vector3.zero;
                 lineRenderer.SetPosition(0, ray.origin + offset);
-                if (Physics.Raycast(ray, out var hit, vv.ballRadius+0.2f, raycastMask))
+                var currentRayDistance = superAdmin != null && superAdmin.isDebug ? rayDistance : vv.ballRadius + 0.2f;
+                if (Physics.Raycast(ray, out var hit, currentRayDistance, raycastMask))
                 {
                     // 存储命中信息
                     lastHits[rayKey] = hit;
@@ -315,31 +321,28 @@ public class HandRaycaster : MonoBehaviour
 
                     // 计算手指索引 (0-9: 左手拇指到小指, 右手拇指到小指)
                     var arrayIndex = handedness == Handedness.Left ? fingerIndex : fingerIndex + 5;
+                    var hitClassName = useTestColors ? $"TestColor_{arrayIndex}" : XRMeshClassification.Unknown.ToString();
+                    var hitColorIndex = useTestColors ? arrayIndex : GetHitMeshClassificationIndex(hit, out hitClassName);
 
-                    Vector3 targetColor;
-                    if (useTestColors)
-                    {
-                        // 使用测试颜色
-                        vfx[index].SetInt("HitColorIndex", arrayIndex);
-                    }
-                    else
-                    {
-                        // 正常颜色逻辑
-                        var materialRef = screenSpaceProjector?.fingerMats?[arrayIndex];
-                        vfx[index].SetInt("HitColorIndex", materialRef == null ? 5 : materialColorMap[materialRef]);
-                    }
-
+                    vfx[index].SetInt("HitColorIndex", hitColorIndex);
+                    lastHitColorIndices[rayKey] = hitColorIndex;
+                    lastHitClassNames[rayKey] = hitClassName;
+                    UpdateFingerHitInfo(handedness, fingerIndex, hit.collider.name, hitClassName, hitColorIndex);
 
                     if (isShowHitInfo)
                     {
                         var hn = handedness == Handedness.Left ? "Left" : "Right";
-                        Debug.Log($"{hn} {GetFingerName(fingerIndex)} hit: {hit.collider.name} at {hit.point}");
+                        var debugTag = hitColorIndex != (int)XRMeshClassification.Unknown ? "[HandRaycastClassHit]" : "[HandRaycastClass]";
+                        Debug.Log($"{debugTag} {hn} {GetFingerName(fingerIndex)} -> {hitClassName} ({hitColorIndex}) [{hit.collider.name}] at {hit.point}");
                     }
                 }
                 else
                 {
                     lineRenderer.SetPosition(1, ray.origin + offset + rayDirection * vv.ballRadius);
                     vfx[index].SetBool("isHit", false);
+                    lastHitColorIndices.Remove(rayKey);
+                    lastHitClassNames.Remove(rayKey);
+                    ResetFingerHitInfo(handedness, fingerIndex);
                     // 移除之前的命中记录
                     if (lastHits.ContainsKey(rayKey)) lastHits.Remove(rayKey);
                 }
@@ -467,14 +470,116 @@ public class HandRaycaster : MonoBehaviour
         var handName = handedness == Handedness.Left ? "Left" : "Right";
         var fingerName = GetFingerName(fingerIndex);
         var rayKey = $"{handName}_{fingerName}";
-
+ 
         return lastHits.TryGetValue(rayKey, out hit);
     }
 
+    public bool TryGetFingerHitClassification(Handedness handedness, int fingerIndex, out int hitColorIndex, out string hitClassName)
+    {
+        var handName = handedness == Handedness.Left ? "Left" : "Right";
+        var fingerName = GetFingerName(fingerIndex);
+        var rayKey = $"{handName}_{fingerName}";
+
+        var hasColorIndex = lastHitColorIndices.TryGetValue(rayKey, out hitColorIndex);
+        var hasClassName = lastHitClassNames.TryGetValue(rayKey, out hitClassName);
+        return hasColorIndex && hasClassName;
+    }
+
+    private int GetHitMeshClassificationIndex(RaycastHit hit, out string className)
+    {
+        className = "Unknown";
+
+#if UNITY_VISIONOS
+        var meshCollider = hit.collider as MeshCollider;
+        var sharedMesh = meshCollider != null ? meshCollider.sharedMesh : null;
+        if (sharedMesh == null)
+            return 0;
+
+        var triangleIndex = hit.triangleIndex;
+        if (triangleIndex < 0)
+            return 0;
+
+        var trackableId = TryExtractTrackableId(hit.collider.transform);
+        if (!trackableId.HasValue)
+            return 0;
+
+        var meshSubsystem = UnityEngine.XR.Management.XRGeneralSettings.Instance?.Manager?.activeLoader?.GetLoadedSubsystem<UnityEngine.XR.XRMeshSubsystem>();
+        if (meshSubsystem == null)
+            return 0;
+
+        using var faceClassifications = meshSubsystem.GetFaceClassifications(trackableId.Value, Allocator.Temp);
+        if (!faceClassifications.IsCreated || triangleIndex >= faceClassifications.Length)
+            return 0;
+
+        var classification = faceClassifications[triangleIndex];
+        className = classification.ToString();
+        return MapVisionOSClassificationToHitTypeIndex(classification);
+#else
+        return 0;
+#endif
+    }
+
+    private int MapVisionOSClassificationToHitTypeIndex(ARMeshClassification classification)
+    {
+        return classification switch
+        {
+            ARMeshClassification.Seat => 3,
+            ARMeshClassification.Table => 4,
+            ARMeshClassification.Floor => 5,
+            ARMeshClassification.Wall => 5,
+            ARMeshClassification.Plant => 10,
+            ARMeshClassification.TV => 11,
+            _ => 0
+        };
+    }
+
+    private TrackableId? TryExtractTrackableId(Transform current)
+    {
+        while (current != null)
+        {
+            var parts = current.name.Split(' ');
+            if (parts.Length > 1)
+            {
+                try
+                {
+                    return new TrackableId(parts[1]);
+                }
+                catch
+                {
+                    // Ignore invalid name format and continue searching parent transforms.
+                }
+            }
+
+            current = current.parent;
+        }
+
+        return null;
+    }
+
+    private void UpdateFingerHitInfo(Handedness handedness, int fingerIndex, string colliderName, string className, int hitColorIndex)
+    {
+        if (superAdmin == null || !superAdmin.isShowHandRayHitClass)
+            return;
+
+        var arrayIndex = handedness == Handedness.Left ? fingerIndex : fingerIndex + 5;
+        var handShortName = handedness == Handedness.Left ? "L" : "R";
+        var fingerName = GetFingerName(fingerIndex);
+        superAdmin.SetFingerHitInfo(arrayIndex, $"{handShortName} {fingerName}: {className} ({hitColorIndex}) [{colliderName}]");
+    }
+
+    private void ResetFingerHitInfo(Handedness handedness, int fingerIndex)
+    {
+        if (superAdmin == null || !superAdmin.isShowHandRayHitClass)
+            return;
+
+        var arrayIndex = handedness == Handedness.Left ? fingerIndex : fingerIndex + 5;
+        superAdmin.ResetFingerHitInfo(arrayIndex);
+    }
+ 
     /// <summary>
     ///     平滑过渡颜色，减少抖动(弃用,平滑算法放到了VFX里)
     /// </summary>
-    /// <param name="key">手指唯一标识</param>
+/// <param name="key">手指唯一标识</param>
     /// <param name="targetColor">目标颜色</param>
     /// <returns>平滑过渡后的颜色</returns>
     private Vector3 SmoothColor(string key, Vector3 targetColor)

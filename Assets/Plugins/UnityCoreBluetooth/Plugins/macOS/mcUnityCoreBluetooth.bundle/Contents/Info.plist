@@ -6,8 +6,6 @@
 	<string>24D81</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
-	<key>CFBundleExecutable</key>
-	<string>mcUnityCoreBluetooth</string>
 	<key>CFBundleIdentifier</key>
 	<string>hogehogehoge.mcUnityCoreBluetooth</string>
 	<key>CFBundleInfoDictionaryVersion</key>
